@@ -1,8 +1,14 @@
 export const dynamic = 'force-dynamic';
 import { PrismaClient } from '@prisma/client'
 import { GymCard } from './components/GymCard'
+import gyms from '@/config/gyms.json'
 
 const prisma = new PrismaClient()
+
+const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as Record<
+  string,
+  (typeof gyms)[number]
+>
 
 interface AggregatedData {
   weekday: bigint
@@ -72,51 +78,59 @@ export default async function HomePage() {
         getLatestOccupancy(gym.id),
         getGymTrend(gym.id),
       ])
+      // Trend: Vergleiche aktuellen Wert mit vorletztem Wert
+      let trendDir: 'up' | 'down' | 'equal' = 'equal';
+      if (latest) {
+        const prev = await prisma.occupancy.findFirst({
+          where: { gymId: gym.id, timestamp: { lt: latest.timestamp } },
+          orderBy: { timestamp: 'desc' },
+        });
+        if (prev) {
+          if (latest.count > prev.count) trendDir = 'up';
+          else if (latest.count < prev.count) trendDir = 'down';
+        }
+      }
       return {
         ...gym,
         latest,
         trend,
+        trendDir,
       }
     })
   )
   // Debug: Logge gymData
   console.log('GYM DATA FOR RENDER:', gymData)
-
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3">
-            💪 Fitness Studio Kapazität
+            💪 Gym Auslastung
           </h1>
           <p className="text-blue-100 text-lg">
-            Überwachung der Live-Auslastung in allen Studios
+            Live-Auslastung in allen Gyms
           </p>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {gymData.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-400 text-lg">Keine Studios verfügbar</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {gymData.map((gym) => (
+        {/* Gyms Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {gymData.map((gym) => (
+            <div key={gym.id} className="flex flex-col">
               <GymCard
-                key={gym.id}
                 id={gym.id}
                 name={gym.name}
                 currentCount={gym.latest?.count ?? 0}
-                maxCount={gym.latest?.maxCount ?? 100}
+                maxCount={GYM_CONFIG_BY_ID[gym.id]?.maxCapacity ?? gym.latest?.maxCount ?? 160}
                 lastUpdate={gym.latest?.timestamp ?? new Date()}
-                trendData={gym.trend}
+                trendData={gym.trend ?? []}
               />
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
     </main>
   )

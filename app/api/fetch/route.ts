@@ -1,23 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
+import gyms from '@/config/gyms.json'
 
 const prisma = new PrismaClient()
-
-/**
- * Fitness-Studios die wir abfragen
- */
-const GYMS = [
-  {
-    id: 'karlsruhe-sued',
-    name: 'Sportprinz Karlsruhe Süd',
-    url: 'https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/22'
-  },
-  {
-    id: 'freiburg-west',
-    name: 'Sportprinz Freiburg West',
-    url: 'https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/16'
-  }
-]
 
 /**
  * POST /api/fetch
@@ -41,7 +26,7 @@ export async function POST(request: NextRequest) {
     let errorCount = 0
 
     // Für jedes Studio: Daten abrufen und speichern
-    for (const gym of GYMS) {
+    for (const gym of gyms) {
       try {
         const response = await fetch(gym.url, {
           method: 'GET',
@@ -93,7 +78,7 @@ export async function POST(request: NextRequest) {
         stats: {
           success: successCount,
           failed: errorCount,
-          total: GYMS.length
+          total: gyms.length
         }
       },
       { status: 200 }
@@ -123,8 +108,8 @@ export async function GET() {
     endpoint: 'POST /api/fetch',
     auth: 'Optional: x-api-key Header',
     stats: {
-      gyms: GYMS.length,
-      gyms_list: GYMS.map(g => ({ id: g.id, name: g.name }))
+      gyms: gyms.length,
+      gyms_list: gyms.map(g => ({ id: g.id, name: g.name }))
     },
     timestamp: new Date()
   })

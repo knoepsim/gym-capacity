@@ -23,7 +23,6 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
@@ -42,11 +41,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    }
-  ],
+  "references": [],
   "exclude": [
     "node_modules"
   ]

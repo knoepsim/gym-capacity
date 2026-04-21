@@ -13,6 +13,7 @@ RUN npm install --omit=dev
 # Kopiere dann den Fetcher Script und Prisma Schema
 COPY scripts/fetcher.js ./scripts/
 COPY prisma ./prisma
+COPY config ./config
 
 # Generiere Prisma Client
 RUN npx prisma generate

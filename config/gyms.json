@@ -10,7 +10,35 @@
     "id": "freiburg-west",
     "name": "Sportprinz Freiburg West",
     "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/16",
-    "maxCapacity": 150,
+    "maxCapacity": 160,
     "description": "Modernes Fitness Studio in Freiburg"
+  },
+  {
+    "id": "hugstetten-sportpark",
+    "name": "Sportpark Hugstetten",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/1",
+    "maxCapacity": 160,
+    "description": "Sportpark Fitnessclub in Hugstetten"
+  },
+  {
+    "id": "freiburg-west-sportpark",
+    "name": "Sportpark Freiburg West",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/2",
+    "maxCapacity": 350,
+    "description": "Sportpark Fitnessclub in Freiburg"
+  },
+  {
+    "id": "freiburg-sued-sportprinz",
+    "name": "Sportprinz Freiburg Süd",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/26",
+    "maxCapacity": 160,
+    "description": "Fitnessstudio in Freiburg Süd"
+  },
+  {
+    "id": "karlsruhe-west-sportprinz",
+    "name": "Sportprinz Karlsruhe West",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/23",
+    "maxCapacity": 160,
+    "description": "Fitnessstudio in Karlsruhe West"
   }
 ]

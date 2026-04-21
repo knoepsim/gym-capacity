@@ -13,10 +13,8 @@ interface GymCardProps {
 }
 
 export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendData }: GymCardProps) {
-  // Balken: min 0, max 160
-  const MAX_CAPACITY = 160
-  const percentage = Math.round((currentCount / MAX_CAPACITY) * 100)
-  const available = Math.max(0, MAX_CAPACITY - currentCount)
+  const percentage = maxCount > 0 ? Math.round((currentCount / maxCount) * 100) : 0
+  const available = Math.max(0, maxCount - currentCount)
 
   // Berechne Minuten seit letztem Update
   const now = new Date()
@@ -59,7 +57,7 @@ export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendDat
           <div className="mb-6 flex-1">
             <div className="flex items-baseline gap-2 mb-2">
               <span className="text-4xl font-bold text-gray-900">{currentCount}</span>
-              <span className="text-gray-500">/ {MAX_CAPACITY}</span>
+              <span className="text-gray-500">/ {maxCount}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
               <div

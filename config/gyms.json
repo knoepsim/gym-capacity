@@ -1,0 +1,16 @@
+[
+  {
+    "id": "karlsruhe-sued",
+    "name": "Sportprinz Karlsruhe Süd",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/22",
+    "maxCapacity": 160,
+    "description": "Unser großes Studio im Süden Karlsruhes"
+  },
+  {
+    "id": "freiburg-west",
+    "name": "Sportprinz Freiburg West",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/16",
+    "maxCapacity": 150,
+    "description": "Modernes Fitness Studio in Freiburg"
+  }
+]

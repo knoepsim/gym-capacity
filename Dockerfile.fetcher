@@ -1,0 +1,22 @@
+# Dockerfile für den Data Fetcher mit eingebautem Cron-Job
+FROM node:20-slim
+
+# Installiere Build-Tools
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Installiere dependencies ZUERST
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+RUN npm install --omit=dev
+
+# Kopiere dann den Fetcher Script und Prisma Schema
+COPY scripts/fetcher.js ./scripts/
+COPY prisma ./prisma
+
+# Generiere Prisma Client
+RUN npx prisma generate
+
+# Der Cron-Job wird durch einen einfachen Loop realisiert
+# Das Script läuft alle 5 Minuten (300 Sekunden)
+CMD ["sh", "-c", "while true; do node scripts/fetcher.js && sleep 300 || sleep 300; done"]

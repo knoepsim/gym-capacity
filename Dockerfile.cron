@@ -1,0 +1,7 @@
+# Leichtgewichtiger Cron-Container der nur die API aufruft
+FROM alpine:latest
+
+RUN apk add --no-cache curl
+
+# Starte einen einfachen Loop der die API alle 5 Minuten aufruft
+CMD ["sh", "-c", "while true; do echo \"[$(date)] Calling fetch API...\"; curl -X POST http://web:3000/api/fetch -H 'Content-Type: application/json' || echo 'Fetch fehlgeschlagen'; sleep 300; done"]

@@ -1,0 +1,36 @@
+{
+  "name": "gym-capacity",
+  "version": "1.0.0",
+  "description": "Fitness Studio Capacity Monitoring",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio",
+    "fetcher": "node scripts/fetcher.js"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "next": "^15.0.0",
+    "@prisma/client": "^5.7.1",
+    "recharts": "^2.10.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.1",
+    "prisma": "^5.7.1"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

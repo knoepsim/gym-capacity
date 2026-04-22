@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { GymAnalyticsClient } from './GymAnalyticsClient'
 import gyms from '@/config/gyms.json'
 
@@ -128,6 +129,11 @@ async function getGymInfo(gymId: string) {
 
 export default async function GymDetailPage({ params }: PageProps) {
   const { gymId } = await params
+
+  // Avoid treating static file-like paths (e.g. /logo.png) as gym IDs.
+  if (gymId.includes('.')) {
+    notFound()
+  }
 
   const gymInfo = await getGymInfo(gymId)
 

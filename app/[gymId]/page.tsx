@@ -129,12 +129,34 @@ async function getGymInfo(gymId: string) {
 export default async function GymDetailPage({ params }: PageProps) {
   const { gymId } = await params
 
-  const [data30d, data1y, dataAll, latestOccupancy, gymInfo] = await Promise.all([
+  const gymInfo = await getGymInfo(gymId)
+
+  if (!gymInfo) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+          <div className="bg-white rounded-xl shadow-lg p-10 text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Studio nicht gefunden</h1>
+            <p className="text-gray-600 mb-8">
+              Für die Gym-ID "{gymId}" gibt es kein Studio. Bitte prüfe den Link oder gehe zurück zur Übersicht.
+            </p>
+            <Link
+              href="/"
+              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-white font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Zur Startseite
+            </Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  const [data30d, data1y, dataAll, latestOccupancy] = await Promise.all([
     getAggregatedData(gymId, '30D'),
     getAggregatedData(gymId, '1Y'),
     getAggregatedData(gymId, 'ALL'),
     getLatestOccupancy(gymId),
-    getGymInfo(gymId),
   ])
 
   const chartData = data30d

@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client'
 import { GymCard } from './components/GymCard'
 import gyms from '@/config/gyms.json'
 import { detectLikelyClosed } from './lib/closedStatus'
+import { Badge } from '@/components/ui/badge'
 
 const prisma = new PrismaClient()
 
@@ -16,6 +17,14 @@ interface AggregatedData {
   hour: bigint
   avg_count: number
   max_capacity: number
+}
+
+function toPlainNumber(value: unknown): number {
+  if (typeof value === 'object' && value !== null && 'toNumber' in value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    return (value as { toNumber: () => number }).toNumber()
+  }
+
+  return Number(value)
 }
 
 async function getLatestOccupancy(gymId: string) {
@@ -58,7 +67,7 @@ async function getGymTrend(gymId: string) {
 
     return trendData.map((item: AggregatedData) => ({
       hour: Number(item.hour),
-      avg_count: typeof item.avg_count === 'string' ? parseFloat(item.avg_count) : item.avg_count,
+      avg_count: toPlainNumber(item.avg_count),
     }))
   } catch (error) {
     console.error('Fehler beim Abrufen des Trends:', error)
@@ -103,24 +112,25 @@ export default async function HomePage() {
   )
   // Debug: Logge gymData
   console.log('GYM DATA FOR RENDER:', gymData)
+
+  const closedCount = gymData.filter((gym) => gym.closedStatus?.isLikelyClosed).length
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-3">
-            💪 Gym Auslastung
-          </h1>
-          <p className="text-blue-100 text-lg">
-            Live-Auslastung in allen Gyms
-          </p>
+    <main className="min-h-screen">
+      <div className="border-b border-border/70 bg-card/70 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
+          <Badge variant="secondary" className="w-fit rounded-md">Live Monitoring</Badge>
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Gym Auslastung</h1>
+          <p className="max-w-2xl text-muted-foreground">Live-Auslastung in allen Gyms mit Trend und Schliess-Erkennung.</p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Badge className="rounded-md">{gymData.length} Studios</Badge>
+            <Badge variant="outline" className="rounded-md">{closedCount} als geschlossen erkannt</Badge>
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Gyms Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {gymData.map((gym) => (
             <div key={gym.id} className="flex flex-col">
               <GymCard

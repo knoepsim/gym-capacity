@@ -1,7 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar } from 'recharts'
+import { MoveRight, TrendingDown, TrendingUp } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { cn } from '@/lib/utils'
 
 interface GymCardProps {
   id: string
@@ -13,6 +19,13 @@ interface GymCardProps {
   isLikelyClosed: boolean
   closedStableMinutes: number
 }
+
+const trendChartConfig = {
+  avg_count: {
+    label: 'Prognose',
+    color: 'hsl(var(--primary))',
+  },
+} satisfies ChartConfig
 
 export function GymCard({
   id,
@@ -39,13 +52,13 @@ export function GymCard({
   const avgTrendCount = hasTrendData
     ? Math.round(nextTwoHours.reduce((sum, d) => sum + d.avg_count, 0) / nextTwoHours.length)
     : displayCount
-  const trendDirection = avgTrendCount > displayCount ? '📈' : avgTrendCount < displayCount ? '📉' : '➡️'
+  const trendDirection = avgTrendCount > displayCount ? 'up' : avgTrendCount < displayCount ? 'down' : 'equal'
   const trendChange = Math.abs(avgTrendCount - displayCount)
 
-  const getStatusColor = (percent: number) => {
-    if (percent >= 80) return 'from-red-500 to-red-600'
-    if (percent >= 50) return 'from-amber-500 to-amber-600'
-    return 'from-green-500 to-green-600'
+  const getStatusClass = (percent: number) => {
+    if (percent >= 80) return 'bg-destructive text-destructive-foreground'
+    if (percent >= 50) return 'bg-amber-500 text-white'
+    return 'bg-emerald-600 text-white'
   }
 
   const getStatusText = (percent: number) => {
@@ -56,69 +69,66 @@ export function GymCard({
 
   return (
     <Link href={`/${id}`}>
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer h-full flex flex-col">
-        {/* Status Bar */}
-        <div className={`h-2 bg-gradient-to-r ${getStatusColor(percentage)}`} />
+      <Card className="h-full cursor-pointer overflow-hidden border-border/70 bg-card/90 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <CardTitle className="text-xl">{name}</CardTitle>
+            <Badge className={cn('rounded-md px-2 py-1 text-[11px] uppercase', getStatusClass(percentage))}>
+              {isLikelyClosed ? 'Geschlossen' : getStatusText(percentage)}
+            </Badge>
+          </div>
+        </CardHeader>
 
-        {/* Content */}
-        <div className="p-6 flex-1 flex flex-col">
-          {/* Header */}
-          <h3 className="text-xl font-bold text-gray-800 mb-4">{name}</h3>
+        <CardContent className="space-y-4">
+          <div className="flex items-end gap-2">
+            <span className="text-4xl font-bold leading-none">{displayCount}</span>
+            <span className="pb-1 text-sm text-muted-foreground">/ {maxCount} Personen</span>
+          </div>
 
-          {/* Current Status */}
-          <div className="mb-6 flex-1">
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-4xl font-bold text-gray-900">{displayCount}</span>
-              <span className="text-gray-500">/ {maxCount}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-              <div
-                className={`h-full bg-gradient-to-r ${getStatusColor(percentage)} transition-all`}
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-            <div className="flex justify-between items-center mt-2">
-              <span className="text-sm font-semibold text-gray-600">
-                {isLikelyClosed ? 'Geschlossen (erkannt)' : `${percentage}% - ${getStatusText(percentage)}`}
-              </span>
-              <span className="text-xs text-gray-500">{available} verfügbar</span>
+          <div className="space-y-2">
+            <Progress value={percentage} className="h-2.5" />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{percentage}% ausgelastet</span>
+              <span>{available} verfugbar</span>
             </div>
             {isLikelyClosed && (
-              <p className="text-xs text-amber-700 mt-2">
-                Count seit ca. {closedStableMinutes} Min unverändert. Anzeige auf 0 gesetzt.
+              <p className="text-xs text-amber-700">
+                Count seit ca. {closedStableMinutes} Min unverandert. Anzeige auf 0 gesetzt.
               </p>
             )}
           </div>
 
-          {/* Trend - nur wenn Daten vorhanden */}
           {!isLikelyClosed && hasTrendData ? (
-            <div className="bg-gray-50 p-4 rounded-lg mb-4">
-              <p className="text-xs text-gray-600 mb-2 font-semibold">TREND NÄCHSTE 2h</p>
-              <div className="flex items-end justify-between">
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Trend nachste 2h</p>
+              <div className="flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-bold text-gray-800">{trendDirection}</p>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="mb-1 flex items-center gap-1 text-sm font-semibold">
+                    {trendDirection === 'up' ? <TrendingUp className="h-4 w-4" /> : null}
+                    {trendDirection === 'down' ? <TrendingDown className="h-4 w-4" /> : null}
+                    {trendDirection === 'equal' ? <MoveRight className="h-4 w-4" /> : null}
                     {trendChange > 0 ? '+' : ''}{trendChange} Personen
                   </p>
                 </div>
-                <ResponsiveContainer width={120} height={40}>
-                  <BarChart data={nextTwoHours}>
-                    <Bar dataKey="avg_count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <ChartContainer config={trendChartConfig} className="h-[42px] w-[120px]">
+                  <BarChart data={nextTwoHours} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                    <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent hideLabel formatter={(value) => `${Math.round(Number(value))}`} />}
+                    />
+                    <Bar dataKey="avg_count" fill="var(--color-avg_count)" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               </div>
             </div>
           ) : null}
+        </CardContent>
 
-          {/* Timestamp */}
-          <p className="text-xs text-gray-500 text-center">
-            Aktualisiert vor {minutesAgo} {minutesAgo === 1 ? 'Min' : 'Min'}
-          </p>
-
-          {/* Click to Details */}
-          <p className="text-xs text-gray-400 mt-3 text-center">Details →</p>
-        </div>
-      </div>
+        <CardFooter className="mt-auto flex items-center justify-between text-xs text-muted-foreground">
+          <span>Aktualisiert vor {minutesAgo} Min</span>
+          <span className="font-medium text-foreground">Details ansehen</span>
+        </CardFooter>
+      </Card>
     </Link>
   )
 }

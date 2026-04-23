@@ -5,11 +5,17 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
   CartesianGrid,
   Cell,
 } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 
 interface ChartDataPoint {
   weekday: number;
@@ -34,14 +40,23 @@ interface GymChartProps {
   maxCapacity: number;
 }
 
+const chartConfig = {
+  median_count: {
+    label: "Median",
+    color: "hsl(var(--primary))",
+  },
+} satisfies ChartConfig;
+
 export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
   if (!data || data.length === 0) {
     return (
-      <div className="glass p-8 rounded-2xl text-center">
-        <p className="text-gray-500 text-lg">
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="text-lg text-muted-foreground">
           Noch keine Daten vorhanden. Der Fetcher wird diese in Kürze abrufen.
-        </p>
-      </div>
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -68,62 +83,65 @@ export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
         const weekday = String(weekdayIndex);
         const weekdayName = WEEKDAY_NAMES[weekdayIndex];
         return (
-          <div key={weekday} className="glass p-8 rounded-2xl">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">{weekdayName}</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={dayData}
-                margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="hour"
-                  tickFormatter={(tick) => `${String(tick).padStart(2, "0")}:00`}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis label={{ value: "Personen", angle: -90, position: "insideLeft" }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #ccc",
-                    borderRadius: "8px",
-                  }}
-                  formatter={(value) => [Math.round(Number(value)), "Median"]}
-                  labelFormatter={(label) => `${String(label).padStart(2, "0")}:00 Uhr`}
-                />
-                <Bar dataKey="median_count" fill="#3b82f6" radius={[8, 8, 0, 0]}>
-                  {dayData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={
-                        maxCapacity > 0 && entry.median_count / maxCapacity > 0.8
-                          ? "#ef4444"
-                          : maxCapacity > 0 && entry.median_count / maxCapacity > 0.5
-                          ? "#f59e0b"
-                          : "#10b981"
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="mt-4 flex gap-6 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded"></div>
-                <span>0-50% Auslastung</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-500 rounded"></div>
-                <span>50-80% Auslastung</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded"></div>
-                <span>&gt;80% Auslastung</span>
-              </div>
+          <Card key={weekday} className="border-border/70 bg-card/90">
+            <CardHeader className="pb-2">
+              <CardTitle>{weekdayName}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[300px] w-full">
+                <BarChart
+                  data={dayData}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
+                >
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="hour"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tickFormatter={(tick) => `${String(tick).padStart(2, "0")}:00`}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    label={{ value: "Personen", angle: -90, position: "insideLeft" }}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={
+                      <ChartTooltipContent
+                        // labelFormatter={(label) => `${String(label).padStart(2, "0")}:00 Uhr`}
+                        formatter={(value) => `${Math.round(Number(value))}`}
+                      />
+                    }
+                  />
+                  <Bar dataKey="median_count" fill="var(--color-median_count)" radius={[8, 8, 0, 0]}>
+                    {dayData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={
+                          maxCapacity > 0 && entry.median_count / maxCapacity > 0.8
+                            ? "hsl(var(--destructive))"
+                            : maxCapacity > 0 && entry.median_count / maxCapacity > 0.5
+                            ? "#f59e0b"
+                            : "#059669"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <Badge variant="secondary" className="rounded-md">0-50% Auslastung</Badge>
+              <Badge className="rounded-md bg-amber-500 text-white hover:bg-amber-500">50-80% Auslastung</Badge>
+              <Badge variant="destructive" className="rounded-md">&gt;80% Auslastung</Badge>
             </div>
-          </div>
+            </CardContent>
+          </Card>
         );
       })}
     </div>

@@ -4,6 +4,18 @@ import { notFound } from 'next/navigation'
 import { GymAnalyticsClient } from './GymAnalyticsClient'
 import gyms from '@/config/gyms.json'
 import { detectLikelyClosed } from '@/app/lib/closedStatus'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
 
 const prisma = new PrismaClient()
 
@@ -17,6 +29,14 @@ interface AggregatedData {
   hour: bigint
   median_count: number
   max_capacity: number
+}
+
+function toPlainNumber(value: unknown): number {
+  if (typeof value === 'object' && value !== null && 'toNumber' in value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
+    return (value as { toNumber: () => number }).toNumber()
+  }
+
+  return Number(value)
 }
 
 type RangeKey = '30D' | '1Y' | 'ALL'
@@ -95,7 +115,7 @@ async function getAggregatedData(gymId: string, range: RangeKey) {
     return rawData.map((item: any) => ({
       weekday: Number(item.weekday),
       hour: Number(item.hour),
-      median_count: typeof item.median_count === 'string' ? parseFloat(item.median_count) : item.median_count,
+      median_count: toPlainNumber(item.median_count),
       max_capacity: Number(item.max_capacity),
     }))
   } catch (error) {
@@ -140,20 +160,21 @@ export default async function GymDetailPage({ params }: PageProps) {
 
   if (!gymInfo) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-          <div className="bg-white rounded-xl shadow-lg p-10 text-center">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Studio nicht gefunden</h1>
-            <p className="text-gray-600 mb-8">
+      <main className="min-h-screen">
+        <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
+          <Card className="border-border/70 bg-card/90 text-center">
+            <CardHeader>
+              <CardTitle className="text-3xl">Studio nicht gefunden</CardTitle>
+              <CardDescription>
               Für die Gym-ID "{gymId}" gibt es kein Studio. Bitte prüfe den Link oder gehe zurück zur Übersicht.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-white font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Zur Startseite
-            </Link>
-          </div>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild>
+                <Link href="/">Zur Startseite</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </main>
     )
@@ -188,6 +209,7 @@ export default async function GymDetailPage({ params }: PageProps) {
   const gymMaxCapacity = GYM_CONFIG_BY_ID[gymId]?.maxCapacity ?? latestOccupancy?.maxCount ?? 160
   const isLikelyClosed = closedStatus.isLikelyClosed
   const displayCount = isLikelyClosed ? 0 : (latestOccupancy?.count ?? 0)
+  const utilization = Math.round((displayCount / gymMaxCapacity) * 100)
 
   const berlinWeekday = new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -206,59 +228,68 @@ export default async function GymDetailPage({ params }: PageProps) {
   const currentWeekday = weekdayMap[berlinWeekday] ?? 0
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header with Back Button */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <Link
-            href="/"
-            className="inline-block text-blue-100 hover:text-white mb-4 transition-colors"
-          >
-            ← Zurück zur Übersicht
-          </Link>
-          <h1 className="text-4xl sm:text-5xl font-bold text-white mb-2">{gymName}</h1>
-          <p className="text-blue-100">
-            Detaillierte Auslastungsanalyse - Wöchentlich & Stündlich
-          </p>
+    <main className="min-h-screen">
+      <div className="border-b border-border/70 bg-card/70 backdrop-blur">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <Breadcrumb className="mb-4">
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <Link href="/">Ubersicht</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{gymName}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{gymName}</h1>
+            <p className="text-muted-foreground">Detaillierte Auslastungsanalyse - wochentlich und stundlich.</p>
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Live Status */}
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         {latestOccupancy && (
-          <div className="bg-white rounded-xl shadow-lg p-8 mb-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Aktuelle Auslastung</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div>
-                <p className="text-gray-600 text-sm font-semibold">PERSONEN</p>
-                <p className="text-4xl font-bold text-blue-600 mt-2">
-                  {displayCount}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-600 text-sm font-semibold">AUSLASTUNG</p>
-                <p className="text-4xl font-bold mt-2">
-                  {Math.round((displayCount / gymMaxCapacity) * 100)}%
-                </p>
-                {isLikelyClosed && (
-                  <p className="text-xs text-amber-700 mt-1">Geschlossen (erkannt)</p>
+          <Card className="mb-12 border-border/70 bg-card/90">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle>Aktuelle Auslastung</CardTitle>
+                {isLikelyClosed ? (
+                  <Badge className="rounded-md bg-amber-500 text-white hover:bg-amber-500">Geschlossen erkannt</Badge>
+                ) : (
+                  <Badge variant="secondary" className="rounded-md">Live</Badge>
                 )}
               </div>
-              <div>
-                <p className="text-gray-600 text-sm font-semibold">TREND</p>
-                <p className="text-lg font-bold mt-2">
-                  {trend === 'up' ? '📈 zunehmend' : trend === 'down' ? '📉 abnehmend' : '➡️ gleichbleibend'}
-                </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+                <div>
+                  <p className="text-sm font-semibold text-muted-foreground">PERSONEN</p>
+                  <p className="mt-2 text-4xl font-bold">{displayCount}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-muted-foreground">AUSLASTUNG</p>
+                  <p className="mt-2 text-4xl font-bold">{utilization}%</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-muted-foreground">TREND</p>
+                  <p className="mt-2 text-lg font-bold">
+                    {trend === 'up' ? 'Zunehmend' : trend === 'down' ? 'Abnehmend' : 'Gleichbleibend'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-muted-foreground">AKTUALISIERT</p>
+                  <p className="mt-2 text-lg">
+                    {new Date(latestOccupancy.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-600 text-sm font-semibold">AKTUALISIERT</p>
-                <p className="text-lg mt-2">
-                  {new Date(latestOccupancy.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })}
-                </p>
-              </div>
-            </div>
-          </div>
+              <Progress value={utilization} />
+            </CardContent>
+          </Card>
         )}
 
         <GymAnalyticsClient
@@ -271,34 +302,45 @@ export default async function GymDetailPage({ params }: PageProps) {
           }}
         />
 
-        {/* Summary Stats */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
-            <h3 className="text-lg font-semibold mb-2">Gering ausgelastet</h3>
-            <p className="text-3xl font-bold">
+        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
+          <Card className="border-emerald-300/70 bg-emerald-50">
+            <CardHeader>
+              <CardTitle className="text-lg">Gering ausgelastet</CardTitle>
+              <CardDescription>Slots mit &lt;50% Auslastung</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-emerald-900">
               {chartData.filter((d) => (d.median_count / gymMaxCapacity) * 100 < 50).length}
-            </p>
-            <p className="text-sm opacity-90 mt-2">Slots mit &lt;50% Auslastung</p>
-          </div>
+              </p>
+            </CardContent>
+          </Card>
 
-          <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl shadow-lg p-6 text-white">
-            <h3 className="text-lg font-semibold mb-2">Moderat ausgelastet</h3>
-            <p className="text-3xl font-bold">
+          <Card className="border-amber-300/70 bg-amber-50">
+            <CardHeader>
+              <CardTitle className="text-lg">Moderat ausgelastet</CardTitle>
+              <CardDescription>Slots mit 50-80% Auslastung</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-amber-900">
               {chartData.filter((d) => {
                 const p = (d.median_count / gymMaxCapacity) * 100
                 return p >= 50 && p < 80
               }).length}
-            </p>
-            <p className="text-sm opacity-90 mt-2">Slots mit 50-80% Auslastung</p>
-          </div>
+              </p>
+            </CardContent>
+          </Card>
 
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-lg p-6 text-white">
-            <h3 className="text-lg font-semibold mb-2">Stark ausgelastet</h3>
-            <p className="text-3xl font-bold">
+          <Card className="border-red-300/70 bg-red-50">
+            <CardHeader>
+              <CardTitle className="text-lg">Stark ausgelastet</CardTitle>
+              <CardDescription>Slots mit &gt;80% Auslastung</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-red-900">
               {chartData.filter((d) => (d.median_count / gymMaxCapacity) * 100 >= 80).length}
-            </p>
-            <p className="text-sm opacity-90 mt-2">Slots mit &gt;80% Auslastung</p>
-          </div>
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </main>

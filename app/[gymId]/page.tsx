@@ -185,8 +185,8 @@ async function getGymTodaySeries(gymId: string): Promise<DailyTrendPoint[]> {
           WHERE "gymId" = ${gymId}
             AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) <
                 DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
-            AND EXTRACT(DOW FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) =
-                EXTRACT(DOW FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
+            AND (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') >
+                ((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days')
         )
         SELECT
           EXTRACT(HOUR FROM local_timestamp) as hour,
@@ -200,10 +200,20 @@ async function getGymTodaySeries(gymId: string): Promise<DailyTrendPoint[]> {
     const actualByHour = new Map(actualRows.map((row) => [Number(row.hour), toPlainNumber(row.actual_count)]))
     const forecastByHour = new Map(forecastRows.map((row) => [Number(row.hour), toPlainNumber(row.forecast_count)]))
 
+    const lastActualValue =
+      [...actualByHour.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, value]) => value)
+        .filter((value) => Number.isFinite(value))
+        .at(-1) ?? null
+
     return Array.from({ length: 24 }, (_, hour) => ({
       hour,
       actual_count: actualByHour.get(hour) ?? null,
-      forecast_count: hour > currentHourBerlin ? (forecastByHour.get(hour) ?? null) : null,
+      forecast_count:
+        hour > currentHourBerlin
+          ? (forecastByHour.get(hour) ?? lastActualValue)
+          : null,
     }))
   } catch (error) {
     console.error('Fehler beim Abrufen der Tagesdaten:', error)

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { GymAnalyticsClient } from './GymAnalyticsClient'
 import gyms from '@/config/gyms.json'
+import { detectLikelyClosed } from '@/app/lib/closedStatus'
 
 const prisma = new PrismaClient()
 
@@ -158,11 +159,12 @@ export default async function GymDetailPage({ params }: PageProps) {
     )
   }
 
-  const [data30d, data1y, dataAll, latestOccupancy] = await Promise.all([
+  const [data30d, data1y, dataAll, latestOccupancy, closedStatus] = await Promise.all([
     getAggregatedData(gymId, '30D'),
     getAggregatedData(gymId, '1Y'),
     getAggregatedData(gymId, 'ALL'),
     getLatestOccupancy(gymId),
+    detectLikelyClosed(prisma, gymId),
   ])
 
   const chartData = data30d
@@ -184,6 +186,8 @@ export default async function GymDetailPage({ params }: PageProps) {
 
   const gymName = gymInfo?.name || 'Unbekanntes Studio'
   const gymMaxCapacity = GYM_CONFIG_BY_ID[gymId]?.maxCapacity ?? latestOccupancy?.maxCount ?? 160
+  const isLikelyClosed = closedStatus.isLikelyClosed
+  const displayCount = isLikelyClosed ? 0 : (latestOccupancy?.count ?? 0)
 
   const berlinWeekday = new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -229,14 +233,17 @@ export default async function GymDetailPage({ params }: PageProps) {
               <div>
                 <p className="text-gray-600 text-sm font-semibold">PERSONEN</p>
                 <p className="text-4xl font-bold text-blue-600 mt-2">
-                  {latestOccupancy.count}
+                  {displayCount}
                 </p>
               </div>
               <div>
                 <p className="text-gray-600 text-sm font-semibold">AUSLASTUNG</p>
                 <p className="text-4xl font-bold mt-2">
-                  {Math.round((latestOccupancy.count / gymMaxCapacity) * 100)}%
+                  {Math.round((displayCount / gymMaxCapacity) * 100)}%
                 </p>
+                {isLikelyClosed && (
+                  <p className="text-xs text-amber-700 mt-1">Geschlossen (erkannt)</p>
+                )}
               </div>
               <div>
                 <p className="text-gray-600 text-sm font-semibold">TREND</p>

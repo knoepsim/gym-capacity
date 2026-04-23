@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 import { PrismaClient } from '@prisma/client'
 import { GymCard } from './components/GymCard'
 import gyms from '@/config/gyms.json'
+import { detectLikelyClosed } from './lib/closedStatus'
 
 const prisma = new PrismaClient()
 
@@ -74,9 +75,10 @@ export default async function HomePage() {
   // Hole aktuelle Auslastung und Trend für alle Gyms
   const gymData = await Promise.all(
     gyms.map(async (gym) => {
-      const [latest, trend] = await Promise.all([
+      const [latest, trend, closedStatus] = await Promise.all([
         getLatestOccupancy(gym.id),
         getGymTrend(gym.id),
+        detectLikelyClosed(prisma, gym.id),
       ])
       // Trend: Vergleiche aktuellen Wert mit vorletztem Wert
       let trendDir: 'up' | 'down' | 'equal' = 'equal';
@@ -95,6 +97,7 @@ export default async function HomePage() {
         latest,
         trend,
         trendDir,
+        closedStatus,
       }
     })
   )
@@ -127,6 +130,8 @@ export default async function HomePage() {
                 maxCount={GYM_CONFIG_BY_ID[gym.id]?.maxCapacity ?? gym.latest?.maxCount ?? 160}
                 lastUpdate={gym.latest?.timestamp ?? new Date()}
                 trendData={gym.trend ?? []}
+                isLikelyClosed={gym.closedStatus?.isLikelyClosed ?? false}
+                closedStableMinutes={gym.closedStatus?.stableMinutes ?? 0}
               />
             </div>
           ))}

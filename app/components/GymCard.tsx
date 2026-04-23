@@ -10,11 +10,23 @@ interface GymCardProps {
   maxCount: number
   lastUpdate: Date
   trendData: { hour: number; avg_count: number }[]
+  isLikelyClosed: boolean
+  closedStableMinutes: number
 }
 
-export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendData }: GymCardProps) {
-  const percentage = maxCount > 0 ? Math.round((currentCount / maxCount) * 100) : 0
-  const available = Math.max(0, maxCount - currentCount)
+export function GymCard({
+  id,
+  name,
+  currentCount,
+  maxCount,
+  lastUpdate,
+  trendData,
+  isLikelyClosed,
+  closedStableMinutes,
+}: GymCardProps) {
+  const displayCount = isLikelyClosed ? 0 : currentCount
+  const percentage = maxCount > 0 ? Math.round((displayCount / maxCount) * 100) : 0
+  const available = Math.max(0, maxCount - displayCount)
 
   // Berechne Minuten seit letztem Update
   const now = new Date()
@@ -26,9 +38,9 @@ export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendDat
   const hasTrendData = nextTwoHours.length > 0
   const avgTrendCount = hasTrendData
     ? Math.round(nextTwoHours.reduce((sum, d) => sum + d.avg_count, 0) / nextTwoHours.length)
-    : currentCount
-  const trendDirection = avgTrendCount > currentCount ? '📈' : avgTrendCount < currentCount ? '📉' : '➡️'
-  const trendChange = Math.abs(avgTrendCount - currentCount)
+    : displayCount
+  const trendDirection = avgTrendCount > displayCount ? '📈' : avgTrendCount < displayCount ? '📉' : '➡️'
+  const trendChange = Math.abs(avgTrendCount - displayCount)
 
   const getStatusColor = (percent: number) => {
     if (percent >= 80) return 'from-red-500 to-red-600'
@@ -56,7 +68,7 @@ export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendDat
           {/* Current Status */}
           <div className="mb-6 flex-1">
             <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-4xl font-bold text-gray-900">{currentCount}</span>
+              <span className="text-4xl font-bold text-gray-900">{displayCount}</span>
               <span className="text-gray-500">/ {maxCount}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
@@ -66,13 +78,20 @@ export function GymCard({ id, name, currentCount, maxCount, lastUpdate, trendDat
               />
             </div>
             <div className="flex justify-between items-center mt-2">
-              <span className="text-sm font-semibold text-gray-600">{percentage}% - {getStatusText(percentage)}</span>
+              <span className="text-sm font-semibold text-gray-600">
+                {isLikelyClosed ? 'Geschlossen (erkannt)' : `${percentage}% - ${getStatusText(percentage)}`}
+              </span>
               <span className="text-xs text-gray-500">{available} verfügbar</span>
             </div>
+            {isLikelyClosed && (
+              <p className="text-xs text-amber-700 mt-2">
+                Count seit ca. {closedStableMinutes} Min unverändert. Anzeige auf 0 gesetzt.
+              </p>
+            )}
           </div>
 
           {/* Trend - nur wenn Daten vorhanden */}
-          {hasTrendData ? (
+          {!isLikelyClosed && hasTrendData ? (
             <div className="bg-gray-50 p-4 rounded-lg mb-4">
               <p className="text-xs text-gray-600 mb-2 font-semibold">TREND NÄCHSTE 2h</p>
               <div className="flex items-end justify-between">

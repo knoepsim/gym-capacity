@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { DailyTrendChart, type DailyTrendPoint } from '@/app/components/DailyTrendChart'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -29,6 +30,16 @@ interface AggregatedData {
   hour: bigint
   median_count: number
   max_capacity: number
+}
+
+interface HourlyActualData {
+  hour: bigint
+  actual_count: number
+}
+
+interface HourlyForecastData {
+  hour: bigint
+  forecast_count: number
 }
 
 function toPlainNumber(value: unknown): number {
@@ -137,6 +148,69 @@ async function getLatestOccupancy(gymId: string) {
   }
 }
 
+async function getGymTodaySeries(gymId: string): Promise<DailyTrendPoint[]> {
+  try {
+    const currentHourBerlin = Number(
+      new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        hour12: false,
+        timeZone: 'Europe/Berlin',
+      }).format(new Date())
+    )
+
+    const [actualRows, forecastRows] = await Promise.all([
+      prisma.$queryRaw<HourlyActualData[]>`
+        WITH localized_occupancy AS (
+          SELECT
+            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
+            count
+          FROM "Occupancy"
+          WHERE "gymId" = ${gymId}
+            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) =
+                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
+        )
+        SELECT
+          EXTRACT(HOUR FROM local_timestamp) as hour,
+          ROUND(AVG(count)::numeric, 2) as actual_count
+        FROM localized_occupancy
+        GROUP BY EXTRACT(HOUR FROM local_timestamp)
+        ORDER BY hour;
+      `,
+      prisma.$queryRaw<HourlyForecastData[]>`
+        WITH localized_occupancy AS (
+          SELECT
+            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
+            count
+          FROM "Occupancy"
+          WHERE "gymId" = ${gymId}
+            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) <
+                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
+            AND EXTRACT(DOW FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) =
+                EXTRACT(DOW FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
+        )
+        SELECT
+          EXTRACT(HOUR FROM local_timestamp) as hour,
+          ROUND(AVG(count)::numeric, 2) as forecast_count
+        FROM localized_occupancy
+        GROUP BY EXTRACT(HOUR FROM local_timestamp)
+        ORDER BY hour;
+      `,
+    ])
+
+    const actualByHour = new Map(actualRows.map((row) => [Number(row.hour), toPlainNumber(row.actual_count)]))
+    const forecastByHour = new Map(forecastRows.map((row) => [Number(row.hour), toPlainNumber(row.forecast_count)]))
+
+    return Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      actual_count: actualByHour.get(hour) ?? null,
+      forecast_count: hour > currentHourBerlin ? (forecastByHour.get(hour) ?? null) : null,
+    }))
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Tagesdaten:', error)
+    return Array.from({ length: 24 }, (_, hour) => ({ hour, actual_count: null, forecast_count: null }))
+  }
+}
+
 async function getGymInfo(gymId: string) {
   try {
     return await prisma.gym.findUnique({
@@ -180,10 +254,11 @@ export default async function GymDetailPage({ params }: PageProps) {
     )
   }
 
-  const [data30d, data1y, dataAll, latestOccupancy, closedStatus] = await Promise.all([
+  const [data30d, data1y, dataAll, todaySeries, latestOccupancy, closedStatus] = await Promise.all([
     getAggregatedData(gymId, '30D'),
     getAggregatedData(gymId, '1Y'),
     getAggregatedData(gymId, 'ALL'),
+    getGymTodaySeries(gymId),
     getLatestOccupancy(gymId),
     detectLikelyClosed(prisma, gymId),
   ])
@@ -291,6 +366,26 @@ export default async function GymDetailPage({ params }: PageProps) {
             </CardContent>
           </Card>
         )}
+
+        <Card className="mb-12 border-border/70 bg-card/90">
+          <CardHeader>
+            <CardTitle>Heutiger Verlauf</CardTitle>
+            <CardDescription>Aktuelle Statistik für heute mit gestrichelter Prognose für kommende Stunden.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DailyTrendChart data={todaySeries} height={260} />
+            <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-[2px] w-5 bg-primary" />
+                Heute
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-[2px] w-5 border-t-2 border-dashed border-amber-500" />
+                Prognose
+              </span>
+            </div>
+          </CardContent>
+        </Card>
 
         <GymAnalyticsClient
           currentWeekday={currentWeekday}

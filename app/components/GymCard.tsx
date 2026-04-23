@@ -1,12 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { BarChart, Bar } from 'recharts'
 import { MoveRight, TrendingDown, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
+import { DailyTrendChart, type DailyTrendPoint } from '@/app/components/DailyTrendChart'
 import { cn } from '@/lib/utils'
 
 interface GymCardProps {
@@ -15,17 +14,10 @@ interface GymCardProps {
   currentCount: number
   maxCount: number
   lastUpdate: Date
-  trendData: { hour: number; avg_count: number }[]
+  dailySeries: DailyTrendPoint[]
   isLikelyClosed: boolean
   closedStableMinutes: number
 }
-
-const trendChartConfig = {
-  avg_count: {
-    label: 'Prognose',
-    color: 'hsl(var(--primary))',
-  },
-} satisfies ChartConfig
 
 export function GymCard({
   id,
@@ -33,7 +25,7 @@ export function GymCard({
   currentCount,
   maxCount,
   lastUpdate,
-  trendData,
+  dailySeries,
   isLikelyClosed,
   closedStableMinutes,
 }: GymCardProps) {
@@ -45,12 +37,20 @@ export function GymCard({
   const now = new Date()
   const minutesAgo = Math.floor((now.getTime() - new Date(lastUpdate).getTime()) / 60000)
 
-  // Trenddaten
-  const currentHour = now.getHours()
-  const nextTwoHours = trendData.filter(d => d.hour === currentHour || d.hour === currentHour + 1)
+  // Trenddaten aus Prognose der nächsten 2 Stunden
+  const currentHour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      hour12: false,
+      timeZone: 'Europe/Berlin',
+    }).format(now)
+  )
+  const nextTwoHours = dailySeries.filter(
+    (d) => (d.hour === currentHour || d.hour === currentHour + 1) && d.forecast_count !== null
+  )
   const hasTrendData = nextTwoHours.length > 0
   const avgTrendCount = hasTrendData
-    ? Math.round(nextTwoHours.reduce((sum, d) => sum + d.avg_count, 0) / nextTwoHours.length)
+    ? Math.round(nextTwoHours.reduce((sum, d) => sum + (d.forecast_count ?? 0), 0) / nextTwoHours.length)
     : displayCount
   const trendDirection = avgTrendCount > displayCount ? 'up' : avgTrendCount < displayCount ? 'down' : 'equal'
   const trendChange = Math.abs(avgTrendCount - displayCount)
@@ -98,27 +98,29 @@ export function GymCard({
             )}
           </div>
 
-          {!isLikelyClosed && hasTrendData ? (
+          {!isLikelyClosed ? (
             <div className="rounded-lg border bg-muted/40 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Trend nachste 2h</p>
-              <div className="flex items-end justify-between gap-3">
-                <div>
-                  <p className="mb-1 flex items-center gap-1 text-sm font-semibold">
-                    {trendDirection === 'up' ? <TrendingUp className="h-4 w-4" /> : null}
-                    {trendDirection === 'down' ? <TrendingDown className="h-4 w-4" /> : null}
-                    {trendDirection === 'equal' ? <MoveRight className="h-4 w-4" /> : null}
-                    {trendChange > 0 ? '+' : ''}{trendChange} Personen
-                  </p>
+              <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Heute & Prognose</p>
+              {hasTrendData ? (
+                <div className="mb-2 flex items-center gap-1 text-sm font-semibold">
+                  {trendDirection === 'up' ? <TrendingUp className="h-4 w-4" /> : null}
+                  {trendDirection === 'down' ? <TrendingDown className="h-4 w-4" /> : null}
+                  {trendDirection === 'equal' ? <MoveRight className="h-4 w-4" /> : null}
+                  {trendChange > 0 ? '+' : ''}{trendChange} Personen (nächste 2h)
                 </div>
-                <ChartContainer config={trendChartConfig} className="h-[42px] w-[120px]">
-                  <BarChart data={nextTwoHours} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-                    <ChartTooltip
-                      cursor={false}
-                      content={<ChartTooltipContent hideLabel formatter={(value) => `${Math.round(Number(value))}`} />}
-                    />
-                    <Bar dataKey="avg_count" fill="var(--color-avg_count)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ChartContainer>
+              ) : (
+                <p className="mb-2 text-xs text-muted-foreground">Noch keine Prognose für die nächsten Stunden verfügbar.</p>
+              )}
+              <DailyTrendChart data={dailySeries} height={140} />
+              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-[2px] w-4 bg-primary" />
+                  Heute
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="h-[2px] w-4 border-t-2 border-dashed border-amber-500" />
+                  Prognose
+                </span>
               </div>
             </div>
           ) : null}

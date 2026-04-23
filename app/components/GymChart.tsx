@@ -1,12 +1,11 @@
 "use client";
 
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
-  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -89,7 +88,7 @@ export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[300px] w-full">
-                <BarChart
+                <AreaChart
                   data={dayData}
                   margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
                 >
@@ -119,21 +118,15 @@ export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
                       />
                     }
                   />
-                  <Bar dataKey="median_count" fill="var(--color-median_count)" radius={[8, 8, 0, 0]}>
-                    {dayData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          maxCapacity > 0 && entry.median_count / maxCapacity > 0.8
-                            ? "hsl(var(--destructive))"
-                            : maxCapacity > 0 && entry.median_count / maxCapacity > 0.5
-                            ? "#f59e0b"
-                            : "#059669"
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
+                  <Area
+                    type="monotone"
+                    dataKey="median_count"
+                    stroke="var(--color-median_count)"
+                    fill="var(--color-median_count)"
+                    fillOpacity={0.25}
+                    strokeWidth={2}
+                  />
+                </AreaChart>
               </ChartContainer>
             <div className="mt-4 flex flex-wrap gap-2 text-sm">
               <Badge variant="secondary" className="rounded-md">0-50% Auslastung</Badge>

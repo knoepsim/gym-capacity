@@ -119,9 +119,8 @@ export default async function HomePage() {
     <main className="min-h-screen">
       <div className="border-b border-border/70 bg-card/70 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
-          <Badge variant="secondary" className="w-fit rounded-md">Live Monitoring</Badge>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Gym Auslastung</h1>
-          <p className="max-w-2xl text-muted-foreground">Live-Auslastung in allen Gyms mit Trend und Schliess-Erkennung.</p>
+          <p className="max-w-2xl text-muted-foreground">Auslastung in allen Gyms mit Trend</p>
           <div className="flex flex-wrap gap-2 text-sm">
             <Badge className="rounded-md">{gymData.length} Studios</Badge>
             <Badge variant="outline" className="rounded-md">{closedCount} als geschlossen erkannt</Badge>

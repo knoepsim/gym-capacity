@@ -77,7 +77,7 @@ export function GymAnalyticsClient({ dataByRange, currentWeekday, maxCapacity }:
 
       <Card className="border-border/70 bg-card/90">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Stundliche Auslastung nach Wochentag</CardTitle>
+          <CardTitle>Stündliche Auslastung nach Wochentag</CardTitle>
           <TabsList>
             <TabsTrigger value="30D">30D</TabsTrigger>
             <TabsTrigger value="1Y">1Y</TabsTrigger>

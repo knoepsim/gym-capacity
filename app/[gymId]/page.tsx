@@ -235,7 +235,7 @@ export default async function GymDetailPage({ params }: PageProps) {
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link href="/">Ubersicht</Link>
+                  <Link href="/">Übersicht</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
@@ -246,7 +246,7 @@ export default async function GymDetailPage({ params }: PageProps) {
           </Breadcrumb>
           <div className="space-y-2">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{gymName}</h1>
-            <p className="text-muted-foreground">Detaillierte Auslastungsanalyse - wochentlich und stundlich.</p>
+            <p className="text-muted-foreground">Detaillierte Auslastungsanalyse - wöchentlich und stündlich.</p>
           </div>
         </div>
       </div>
@@ -260,7 +260,7 @@ export default async function GymDetailPage({ params }: PageProps) {
                 {isLikelyClosed ? (
                   <Badge className="rounded-md bg-amber-500 text-white hover:bg-amber-500">Geschlossen erkannt</Badge>
                 ) : (
-                  <Badge variant="secondary" className="rounded-md">Live</Badge>
+                  <Badge variant="secondary" className="rounded-md">Offen</Badge>
                 )}
               </div>
             </CardHeader>

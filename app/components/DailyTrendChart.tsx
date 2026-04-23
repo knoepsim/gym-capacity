@@ -30,6 +30,12 @@ const dailyTrendConfig = {
   },
 } satisfies ChartConfig;
 
+function formatHourRange(value: unknown): string {
+  const hour = Number(value)
+  const safeHour = Number.isFinite(hour) ? Math.max(0, Math.min(23, hour)) : 0
+  return `${String(safeHour).padStart(2, "0")}:00-${String(safeHour).padStart(2, "0")}:59 Uhr`
+}
+
 export function DailyTrendChart({ data, height = 240 }: DailyTrendChartProps) {
   return (
     <ChartContainer config={dailyTrendConfig} className="w-full" style={{ height }}>
@@ -47,7 +53,7 @@ export function DailyTrendChart({ data, height = 240 }: DailyTrendChartProps) {
           cursor={false}
           content={
             <ChartTooltipContent
-              labelFormatter={(value) => `${String(value).padStart(2, "0")}:00 Uhr`}
+              labelFormatter={(value) => formatHourRange(value)}
               formatter={(value) => `${Math.round(Number(value))}`}
             />
           }

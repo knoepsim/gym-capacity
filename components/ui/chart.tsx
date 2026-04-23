@@ -115,17 +115,21 @@ const ChartTooltipContent = React.forwardRef<
       }
 
       const item = payload[0]
-      const key = `${labelKey || item?.dataKey || item?.name || "value"}`
+      const key = `${item?.dataKey || item?.name || "value"}`
       const itemConfig = config[key]
-      const value = itemConfig?.label ?? label
+      const payloadLabel =
+        labelKey && item?.payload && labelKey in item.payload
+          ? item.payload[labelKey as keyof typeof item.payload]
+          : label
+      const value = itemConfig?.label ?? payloadLabel
 
       if (labelFormatter) {
         return (
-          <div className="font-medium">{labelFormatter(value, payload)}</div>
+          <div className="font-medium">{labelFormatter(payloadLabel, payload)}</div>
         )
       }
 
-      if (!value) {
+      if (value === null || value === undefined) {
         return null
       }
 

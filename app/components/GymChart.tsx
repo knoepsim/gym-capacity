@@ -46,6 +46,12 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+function formatHourRange(value: unknown): string {
+  const hour = Number(value);
+  const safeHour = Number.isFinite(hour) ? Math.max(0, Math.min(23, hour)) : 0;
+  return `${String(safeHour).padStart(2, "0")}:00-${String(safeHour).padStart(2, "0")}:59 Uhr`;
+}
+
 export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
   if (!data || data.length === 0) {
     return (
@@ -113,8 +119,8 @@ export function GymChart({ data, weekdayOrder, maxCapacity }: GymChartProps) {
                     cursor={false}
                     content={
                       <ChartTooltipContent
-                        // labelFormatter={(label) => `${String(label).padStart(2, "0")}:00 Uhr`}
-                        formatter={(value) => `${Math.round(Number(value))}`}
+                        labelFormatter={(label) => formatHourRange(label)}
+                        formatter={(value) => `${Math.round(Number(value))} Personen`}
                       />
                     }
                   />

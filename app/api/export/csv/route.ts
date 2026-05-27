@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
 
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -65,7 +63,5 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('CSV export failed:', error)
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 })
-  } finally {
-    await prisma.$disconnect()
   }
 }

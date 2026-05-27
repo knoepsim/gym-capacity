@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import gyms from '@/config/gyms.json'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
+import { upsertGymSnapshot } from '@/app/lib/gymSnapshot'
 
 /**
  * POST /api/fetch
@@ -13,9 +12,11 @@ export async function POST(request: NextRequest) {
   try {
     console.log(`[${new Date().toISOString()}] Fetch API aufgerufen`)
 
-    // Optional: Authentifizierung prüfen (z.B. mit API Key)
+    // Require the configured API key when present in the environment.
     const apiKey = request.headers.get('x-api-key')
-    if (apiKey && apiKey !== process.env.FETCH_API_KEY) {
+    const expectedApiKey = process.env.FETCH_API_KEY
+
+    if (expectedApiKey && apiKey !== expectedApiKey) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -61,6 +62,9 @@ export async function POST(request: NextRequest) {
           }
         })
 
+        // Cache the derived snapshot once per fetch cycle so page requests only read cached data.
+        await upsertGymSnapshot(prisma, gym.id)
+
         const occupancyPercent = Math.round((data.count / data.maxCount) * 100)
         console.log(`✓ ${gym.name}: ${data.count}/${data.maxCount} (${occupancyPercent}%)`)
         successCount++
@@ -93,8 +97,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     )
-  } finally {
-    await prisma.$disconnect()
   }
 }
 
@@ -106,7 +108,7 @@ export async function GET() {
   return NextResponse.json({
     message: 'Gym Capacity Fetcher API',
     endpoint: 'POST /api/fetch',
-    auth: 'Optional: x-api-key Header',
+      auth: process.env.FETCH_API_KEY ? 'Required: x-api-key Header' : 'Optional: x-api-key Header',
     stats: {
       gyms: gyms.length,
       gyms_list: gyms.map(g => ({ id: g.id, name: g.name }))

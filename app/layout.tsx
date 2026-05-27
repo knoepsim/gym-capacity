@@ -1,7 +1,13 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, Geist } from "next/font/google"
 import "./globals.css"
 import AutoRefresh from './components/AutoRefresh'
+import { FeedbackWidget } from './components/FeedbackWidget'
+import { ThemeProvider } from './components/ThemeProvider'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -16,10 +22,15 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
       <body className={inter.className}>
-        <AutoRefresh />
-        {children}
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <TooltipProvider>
+            <AutoRefresh />
+            <FeedbackWidget />
+            {children}
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

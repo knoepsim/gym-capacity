@@ -1,7 +1,8 @@
+
 'use client'
 
 import Link from 'next/link'
-import { MoveRight, TrendingDown, TrendingUp } from 'lucide-react'
+import { MoveRight, Star, TrendingDown, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -13,10 +14,12 @@ interface GymCardProps {
   name: string
   currentCount: number
   maxCount: number
-  lastUpdate: Date
+  lastUpdate: Date | string
   dailySeries: DailyTrendPoint[]
   isLikelyClosed: boolean
   closedStableMinutes: number
+  isFavorite?: boolean
+  onToggleFavorite?: (gymId: string) => void
 }
 
 export function GymCard({
@@ -28,6 +31,8 @@ export function GymCard({
   dailySeries,
   isLikelyClosed,
   closedStableMinutes,
+  isFavorite = false,
+  onToggleFavorite,
 }: GymCardProps) {
   const displayCount = isLikelyClosed ? 0 : currentCount
   const percentage = maxCount > 0 ? Math.round((displayCount / maxCount) * 100) : 0
@@ -68,14 +73,32 @@ export function GymCard({
   }
 
   return (
-    <Link href={`/${id}`}>
-      <Card className="h-full cursor-pointer overflow-hidden border-border/70 bg-card/90 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg">
+    <div className="relative h-full">
+      <Link href={`/${id}`} className="block h-full">
+        <Card className="h-full cursor-pointer overflow-hidden border-border/70 bg-card/90 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">
             <CardTitle className="text-xl">{name}</CardTitle>
-            <Badge className={cn('rounded-md px-2 py-1 text-[11px] uppercase', getStatusClass(percentage))}>
-              {isLikelyClosed ? 'Geschlossen' : getStatusText(percentage)}
-            </Badge>
+            <div className="flex items-start gap-3">
+              <Badge className={cn('rounded-md px-2 py-1 text-[11px] uppercase', getStatusClass(percentage))}>
+                {isLikelyClosed ? 'Geschlossen' : getStatusText(percentage)}
+              </Badge>
+              {onToggleFavorite ? (
+                <button
+                  type="button"
+                  className="mt-0.5 inline-flex h-6 w-6 items-center justify-center backdrop-blur transition hover:scale-105"
+                  aria-label={isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+                  aria-pressed={isFavorite}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onToggleFavorite(id)
+                  }}
+                >
+                  <Star className={cn('h-4 w-4', isFavorite ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground')} />
+                </button>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
 
@@ -130,7 +153,8 @@ export function GymCard({
           <span>Aktualisiert vor {minutesAgo} Min</span>
           <span className="font-medium text-foreground">Details ansehen</span>
         </CardFooter>
-      </Card>
-    </Link>
+        </Card>
+      </Link>
+    </div>
   )
 }

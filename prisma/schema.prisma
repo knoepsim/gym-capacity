@@ -16,6 +16,8 @@ model Gym {
   name      String
   url       String      @unique
   occupancy Occupancy[]
+  feedbacks GymFeedback[]
+  analyticsCache GymAnalyticsCache?
   
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
@@ -31,4 +33,30 @@ model Occupancy {
 
   @@index([gymId, timestamp])
   @@index([timestamp])
+}
+
+model GymFeedback {
+  id             Int      @id @default(autoincrement())
+  gymId          String
+  gym            Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  occupancyCount Int?
+  waitTimeRating  Int?
+  densityRating   Int?
+  wouldGoRating   Int?
+  comment        String?
+  sourcePath     String?
+  createdAt      DateTime @default(now())
+
+  @@index([gymId, createdAt])
+  @@index([createdAt])
+}
+
+model GymAnalyticsCache {
+  gymId                String   @id
+  gym                  Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  sourceLatestTimestamp DateTime?
+  payload              Json
+  computedAt           DateTime @updatedAt
+
+  @@index([computedAt])
 }

@@ -1,30 +1,15 @@
 export const dynamic = 'force-dynamic';
-import { PrismaClient } from '@prisma/client'
-import { GymCard } from './components/GymCard'
+import { OverviewClient } from './components/OverviewClient'
+import { ThemeToggle } from './components/ThemeToggle'
 import gyms from '@/config/gyms.json'
-import { detectLikelyClosed } from './lib/closedStatus'
-import { buildTodayForecastSeries } from './lib/forecasting'
 import { Badge } from '@/components/ui/badge'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
+import { getCachedGymSnapshot } from './lib/gymSnapshot'
 
 const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as Record<
   string,
   (typeof gyms)[number]
 >
-
-async function getLatestOccupancy(gymId: string) {
-  try {
-    const latest = await prisma.occupancy.findFirst({
-      where: { gymId },
-      orderBy: { timestamp: 'desc' },
-    })
-    return latest
-  } catch (error) {
-    console.error('Fehler beim Abrufen der neuesten Auslastung:', error)
-    return null
-  }
-}
 
 async function getAllGyms() {
   try {
@@ -40,49 +25,47 @@ async function getAllGyms() {
 
 export default async function HomePage() {
   const gyms = await getAllGyms()
-  // Debug: Logge die Gyms
-  console.log('GYMS FROM PRISMA:', gyms)
 
-  // Hole aktuelle Auslastung und Tages-Statistik für alle Gyms
   const gymData = await Promise.all(
     gyms.map(async (gym) => {
-      const [latest, dailySeries, closedStatus] = await Promise.all([
-        getLatestOccupancy(gym.id),
-        buildTodayForecastSeries(prisma, gym.id),
-        detectLikelyClosed(prisma, gym.id),
-      ])
-      // Trend: Vergleiche aktuellen Wert mit vorletztem Wert
-      let trendDir: 'up' | 'down' | 'equal' = 'equal';
-      if (latest) {
-        const prev = await prisma.occupancy.findFirst({
-          where: { gymId: gym.id, timestamp: { lt: latest.timestamp } },
-          orderBy: { timestamp: 'desc' },
-        });
-        if (prev) {
-          if (latest.count > prev.count) trendDir = 'up';
-          else if (latest.count < prev.count) trendDir = 'down';
-        }
-      }
+      const snapshot = await getCachedGymSnapshot(prisma, gym.id)
       return {
         ...gym,
-        latest,
-        dailySeries,
-        trendDir,
-        closedStatus,
+        latest: snapshot.latest ? { ...snapshot.latest, timestamp: new Date(snapshot.latest.timestamp) } : null,
+        dailySeries: snapshot.dailySeries,
+        trendDir: snapshot.trendDir,
+        closedStatus: snapshot.closedStatus,
       }
     })
   )
-  // Debug: Logge gymData
-  console.log('GYM DATA FOR RENDER:', gymData)
 
   const closedCount = gymData.filter((gym) => gym.closedStatus?.isLikelyClosed).length
+  const maxCapacityByGym = Object.fromEntries(
+    gymData.map((gym) => [gym.id, GYM_CONFIG_BY_ID[gym.id]?.maxCapacity ?? gym.latest?.maxCount ?? 160])
+  ) as Record<string, number>
+
+  const serializableGyms = gymData.map((gym) => ({
+    ...gym,
+        latest: gym.latest
+          ? {
+              count: gym.latest.count,
+              maxCount: gym.latest.maxCount,
+              timestamp: gym.latest.timestamp.toISOString(),
+            }
+          : null,
+  }))
 
   return (
     <main className="min-h-screen">
       <div className="border-b border-border/70 bg-card/70 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Gym Auslastung</h1>
-          <p className="max-w-2xl text-muted-foreground">Auslastung in allen Gyms mit Trend</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Gym Auslastung</h1>
+              <p className="max-w-2xl text-muted-foreground">Auslastung in allen Gyms mit Trend</p>
+            </div>
+            <ThemeToggle />
+          </div>
           <div className="flex flex-wrap gap-2 text-sm">
             <Badge className="rounded-md">{gymData.length} Studios</Badge>
             <Badge variant="outline" className="rounded-md">{closedCount} als geschlossen erkannt</Badge>
@@ -91,22 +74,7 @@ export default async function HomePage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {gymData.map((gym) => (
-            <div key={gym.id} className="flex flex-col">
-              <GymCard
-                id={gym.id}
-                name={gym.name}
-                currentCount={gym.latest?.count ?? 0}
-                maxCount={GYM_CONFIG_BY_ID[gym.id]?.maxCapacity ?? gym.latest?.maxCount ?? 160}
-                lastUpdate={gym.latest?.timestamp ?? new Date()}
-                dailySeries={gym.dailySeries ?? []}
-                isLikelyClosed={gym.closedStatus?.isLikelyClosed ?? false}
-                closedStableMinutes={gym.closedStatus?.stableMinutes ?? 0}
-              />
-            </div>
-          ))}
-        </div>
+        <OverviewClient gyms={serializableGyms} maxCapacityByGym={maxCapacityByGym} />
       </div>
     </main>
   )

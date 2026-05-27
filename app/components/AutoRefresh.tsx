@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
-export default function AutoRefresh({ interval = 300000 }: { interval?: number }) {
+export default function AutoRefresh({ interval = 1*60*1000 }: { interval?: number }) {
   const router = useRouter()
   const last = useRef<Record<string, string | null> | null>(null)
 

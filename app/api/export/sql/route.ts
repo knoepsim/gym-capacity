@@ -68,11 +68,9 @@ function buildSqlDump(
   }
 
   lines.push('-- Keep autoincrement sequence in sync with imported IDs')
-  lines.push('SELECT setval(')
-  lines.push("  pg_get_serial_sequence('\\\"Occupancy\\\"', 'id'),")
-  lines.push('  COALESCE((SELECT MAX("id") FROM "Occupancy"), 1),')
-  lines.push('  (SELECT COUNT(*) > 0 FROM "Occupancy")')
-  lines.push(');')
+  lines.push(
+    "SELECT setval(pg_get_serial_sequence('\"Occupancy\"','id'), COALESCE((SELECT MAX(\"id\") FROM \"Occupancy\"), 1), (SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END FROM \"Occupancy\"));"
+  )
   lines.push('')
   lines.push('COMMIT;')
 
@@ -88,10 +86,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const [gyms, occupancies] = await Promise.all([
-      prisma.gym.findMany({ orderBy: { id: 'asc' } }),
-      prisma.occupancy.findMany({ orderBy: { id: 'asc' } }),
-    ])
+    // Support query params: ?since=2026-04-01T00:00:00Z&limit=10000
+    const params = request.nextUrl?.searchParams
+    const sinceParam = params?.get('since')
+    const limitParam = params?.get('limit')
+
+    const sinceDate = sinceParam ? new Date(sinceParam) : null
+    const limit = limitParam ? Number(limitParam) : undefined
+
+    const gymsPromise = prisma.gym.findMany({ orderBy: { id: 'asc' } })
+    const occupancyWhere: any = {}
+    if (sinceDate && !isNaN(sinceDate.getTime())) {
+      occupancyWhere.timestamp = { gte: sinceDate }
+    }
+    const occupanciesPromise = prisma.occupancy.findMany({
+      where: occupancyWhere,
+      orderBy: { id: 'asc' },
+      ...(limit ? { take: limit } : {}),
+    })
+
+    const [gyms, occupancies] = await Promise.all([gymsPromise, occupanciesPromise])
 
     const sqlDump = buildSqlDump(gyms, occupancies)
     const filename = `gym-capacity-export-${new Date().toISOString().replace(/[:.]/g, '-')}.sql`

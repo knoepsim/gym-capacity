@@ -4,11 +4,12 @@ import { notFound } from 'next/navigation'
 import { GymAnalyticsClient } from './GymAnalyticsClient'
 import gyms from '@/config/gyms.json'
 import { detectLikelyClosed } from '@/app/lib/closedStatus'
+import { buildStableAggregatedData, buildStableTrendDirection, buildTodayForecastSeries } from '@/app/lib/forecasting'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { DailyTrendChart, type DailyTrendPoint } from '@/app/components/DailyTrendChart'
+import { DailyTrendChart } from '@/app/components/DailyTrendChart'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -25,114 +26,12 @@ const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as
   (typeof gyms)[number]
 >
 
-interface AggregatedData {
-  weekday: bigint
-  hour: bigint
-  median_count: number
-  max_capacity: number
-}
-
-interface HourlyActualData {
-  hour: bigint
-  actual_count: number
-}
-
-interface HourlyForecastData {
-  hour: bigint
-  forecast_count: number
-}
-
-function toPlainNumber(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
-    return (value as { toNumber: () => number }).toNumber()
-  }
-
-  return Number(value)
-}
-
 type RangeKey = '30D' | '1Y' | 'ALL'
 
 interface PageProps {
   params: Promise<{
     gymId: string
   }>
-}
-
-async function getAggregatedData(gymId: string, range: RangeKey) {
-  try {
-    let rawData: AggregatedData[]
-
-    if (range === 'ALL') {
-      rawData = await prisma.$queryRaw<AggregatedData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count,
-            "maxCount"
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-        )
-        SELECT
-          EXTRACT(DOW FROM local_timestamp) as weekday,
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY count) as median_count,
-          MAX("maxCount") as max_capacity
-        FROM localized_occupancy
-        GROUP BY EXTRACT(DOW FROM local_timestamp), EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY weekday, hour;
-      `
-    } else if (range === '1Y') {
-      rawData = await prisma.$queryRaw<AggregatedData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count,
-            "maxCount"
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND "timestamp" > NOW() - INTERVAL '1 year'
-        )
-        SELECT
-          EXTRACT(DOW FROM local_timestamp) as weekday,
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY count) as median_count,
-          MAX("maxCount") as max_capacity
-        FROM localized_occupancy
-        GROUP BY EXTRACT(DOW FROM local_timestamp), EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY weekday, hour;
-      `
-    } else {
-      rawData = await prisma.$queryRaw<AggregatedData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count,
-            "maxCount"
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND "timestamp" > NOW() - INTERVAL '30 days'
-        )
-        SELECT
-          EXTRACT(DOW FROM local_timestamp) as weekday,
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY count) as median_count,
-          MAX("maxCount") as max_capacity
-        FROM localized_occupancy
-        GROUP BY EXTRACT(DOW FROM local_timestamp), EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY weekday, hour;
-      `
-    }
-
-    return rawData.map((item: any) => ({
-      weekday: Number(item.weekday),
-      hour: Number(item.hour),
-      median_count: toPlainNumber(item.median_count),
-      max_capacity: Number(item.max_capacity),
-    }))
-  } catch (error) {
-    console.error('Fehler beim Abrufen der aggregierten Daten:', error)
-    return []
-  }
 }
 
 async function getLatestOccupancy(gymId: string) {
@@ -145,79 +44,6 @@ async function getLatestOccupancy(gymId: string) {
   } catch (error) {
     console.error('Fehler beim Abrufen der neuesten Auslastung:', error)
     return null
-  }
-}
-
-async function getGymTodaySeries(gymId: string): Promise<DailyTrendPoint[]> {
-  try {
-    const currentHourBerlin = Number(
-      new Intl.DateTimeFormat('en-US', {
-        hour: '2-digit',
-        hour12: false,
-        timeZone: 'Europe/Berlin',
-      }).format(new Date())
-    )
-
-    const [actualRows, forecastRows] = await Promise.all([
-      prisma.$queryRaw<HourlyActualData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) =
-                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
-        )
-        SELECT
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          ROUND(AVG(count)::numeric, 2) as actual_count
-        FROM localized_occupancy
-        GROUP BY EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY hour;
-      `,
-      prisma.$queryRaw<HourlyForecastData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) <
-                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
-            AND (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') >
-                ((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days')
-        )
-        SELECT
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          ROUND(AVG(count)::numeric, 2) as forecast_count
-        FROM localized_occupancy
-        GROUP BY EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY hour;
-      `,
-    ])
-
-    const actualByHour = new Map(actualRows.map((row) => [Number(row.hour), toPlainNumber(row.actual_count)]))
-    const forecastByHour = new Map(forecastRows.map((row) => [Number(row.hour), toPlainNumber(row.forecast_count)]))
-
-    const lastActualValue =
-      [...actualByHour.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, value]) => value)
-        .filter((value) => Number.isFinite(value))
-        .at(-1) ?? null
-
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      actual_count: actualByHour.get(hour) ?? null,
-      forecast_count:
-        hour > currentHourBerlin
-          ? (forecastByHour.get(hour) ?? lastActualValue)
-          : null,
-    }))
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Tagesdaten:', error)
-    return Array.from({ length: 24 }, (_, hour) => ({ hour, actual_count: null, forecast_count: null }))
   }
 }
 
@@ -265,30 +91,19 @@ export default async function GymDetailPage({ params }: PageProps) {
   }
 
   const [data30d, data1y, dataAll, todaySeries, latestOccupancy, closedStatus] = await Promise.all([
-    getAggregatedData(gymId, '30D'),
-    getAggregatedData(gymId, '1Y'),
-    getAggregatedData(gymId, 'ALL'),
-    getGymTodaySeries(gymId),
+    buildStableAggregatedData(prisma, gymId, 30),
+    buildStableAggregatedData(prisma, gymId, 365),
+    buildStableAggregatedData(prisma, gymId),
+    buildTodayForecastSeries(prisma, gymId),
     getLatestOccupancy(gymId),
     detectLikelyClosed(prisma, gymId),
   ])
 
   const chartData = data30d
 
-  // Trend: Vergleiche aktuelle Auslastung mit vorletztem Wert
-  let trend: 'up' | 'down' | 'equal' = 'equal';
-  let previousCount = null;
-  if (latestOccupancy) {
-    const prev = await prisma.occupancy.findFirst({
-      where: { gymId, timestamp: { lt: latestOccupancy.timestamp } },
-      orderBy: { timestamp: 'desc' },
-    });
-    if (prev) {
-      previousCount = prev.count;
-      if (latestOccupancy.count > prev.count) trend = 'up';
-      else if (latestOccupancy.count < prev.count) trend = 'down';
-    }
-  }
+  const trend = latestOccupancy
+    ? await buildStableTrendDirection(prisma, gymId, latestOccupancy.count, latestOccupancy.timestamp)
+    : 'equal'
 
   const gymName = gymInfo?.name || 'Unbekanntes Studio'
   const gymMaxCapacity = GYM_CONFIG_BY_ID[gymId]?.maxCapacity ?? latestOccupancy?.maxCount ?? 160

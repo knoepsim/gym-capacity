@@ -3,8 +3,8 @@ import { PrismaClient } from '@prisma/client'
 import { GymCard } from './components/GymCard'
 import gyms from '@/config/gyms.json'
 import { detectLikelyClosed } from './lib/closedStatus'
+import { buildTodayForecastSeries } from './lib/forecasting'
 import { Badge } from '@/components/ui/badge'
-import { type DailyTrendPoint } from '@/app/components/DailyTrendChart'
 
 const prisma = new PrismaClient()
 
@@ -12,24 +12,6 @@ const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as
   string,
   (typeof gyms)[number]
 >
-
-interface HourlyActualData {
-  hour: bigint
-  actual_count: number
-}
-
-interface HourlyForecastData {
-  hour: bigint
-  forecast_count: number
-}
-
-function toPlainNumber(value: unknown): number {
-  if (typeof value === 'object' && value !== null && 'toNumber' in value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
-    return (value as { toNumber: () => number }).toNumber()
-  }
-
-  return Number(value)
-}
 
 async function getLatestOccupancy(gymId: string) {
   try {
@@ -55,79 +37,6 @@ async function getAllGyms() {
   }
 }
 
-async function getGymTodaySeries(gymId: string): Promise<DailyTrendPoint[]> {
-  try {
-    const currentHourBerlin = Number(
-      new Intl.DateTimeFormat('en-US', {
-        hour: '2-digit',
-        hour12: false,
-        timeZone: 'Europe/Berlin',
-      }).format(new Date())
-    )
-
-    const [actualRows, forecastRows] = await Promise.all([
-      prisma.$queryRaw<HourlyActualData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) =
-                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
-        )
-        SELECT
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          ROUND(AVG(count)::numeric, 2) as actual_count
-        FROM localized_occupancy
-        GROUP BY EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY hour;
-      `,
-      prisma.$queryRaw<HourlyForecastData[]>`
-        WITH localized_occupancy AS (
-          SELECT
-            (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') as local_timestamp,
-            count
-          FROM "Occupancy"
-          WHERE "gymId" = ${gymId}
-            AND DATE((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) <
-                DATE((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin'))
-            AND (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin') >
-                ((CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Berlin') - INTERVAL '28 days')
-        )
-        SELECT
-          EXTRACT(HOUR FROM local_timestamp) as hour,
-          ROUND(AVG(count)::numeric, 2) as forecast_count
-        FROM localized_occupancy
-        GROUP BY EXTRACT(HOUR FROM local_timestamp)
-        ORDER BY hour;
-      `,
-    ])
-
-    const actualByHour = new Map(actualRows.map((row) => [Number(row.hour), toPlainNumber(row.actual_count)]))
-    const forecastByHour = new Map(forecastRows.map((row) => [Number(row.hour), toPlainNumber(row.forecast_count)]))
-
-    const lastActualValue =
-      [...actualByHour.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([, value]) => value)
-        .filter((value) => Number.isFinite(value))
-        .at(-1) ?? null
-
-    return Array.from({ length: 24 }, (_, hour) => ({
-      hour,
-      actual_count: actualByHour.get(hour) ?? null,
-      forecast_count:
-        hour > currentHourBerlin
-          ? (forecastByHour.get(hour) ?? lastActualValue)
-          : null,
-    }))
-  } catch (error) {
-    console.error('Fehler beim Abrufen der Tagesdaten:', error)
-    return Array.from({ length: 24 }, (_, hour) => ({ hour, actual_count: null, forecast_count: null }))
-  }
-}
-
 
 export default async function HomePage() {
   const gyms = await getAllGyms()
@@ -139,7 +48,7 @@ export default async function HomePage() {
     gyms.map(async (gym) => {
       const [latest, dailySeries, closedStatus] = await Promise.all([
         getLatestOccupancy(gym.id),
-        getGymTodaySeries(gym.id),
+        buildTodayForecastSeries(prisma, gym.id),
         detectLikelyClosed(prisma, gym.id),
       ])
       // Trend: Vergleiche aktuellen Wert mit vorletztem Wert

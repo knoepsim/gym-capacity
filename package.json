@@ -11,7 +11,9 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
-    "fetcher": "node scripts/fetcher.js"
+    "fetcher": "node scripts/fetcher.js",
+    "eval": "node scripts/eval_nowcast.js",
+    "arima": "node scripts/arima_prototype.js"
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
@@ -36,6 +38,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"
   },
+  
   "prisma": {
     "seed": "node prisma/seed.js"
   }

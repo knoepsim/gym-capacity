@@ -1,6 +1,7 @@
 
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { MoveRight, Star, TrendingDown, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -38,11 +39,21 @@ export function GymCard({
   const percentage = maxCount > 0 ? Math.round((displayCount / maxCount) * 100) : 0
   const available = Math.max(0, maxCount - displayCount)
 
-  // Berechne Minuten seit letztem Update
-  const now = new Date()
-  const minutesAgo = Math.floor((now.getTime() - new Date(lastUpdate).getTime()) / 60000)
+  const [minutesAgo, setMinutesAgo] = useState<number | null>(null)
+
+  useEffect(() => {
+    const updateMinutesAgo = () => {
+      setMinutesAgo(Math.floor((Date.now() - new Date(lastUpdate).getTime()) / 60000))
+    }
+
+    updateMinutesAgo()
+    const timer = window.setInterval(updateMinutesAgo, 60_000)
+
+    return () => window.clearInterval(timer)
+  }, [lastUpdate])
 
   // Trenddaten aus Prognose der nächsten 2 Stunden
+  const now = new Date()
   const currentHour = Number(
     new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
@@ -150,7 +161,9 @@ export function GymCard({
         </CardContent>
 
         <CardFooter className="mt-auto flex items-center justify-between text-xs text-muted-foreground">
-          <span>Aktualisiert vor {minutesAgo} Min</span>
+          <span suppressHydrationWarning>
+            {minutesAgo === null ? 'Aktualisiert vor … Min' : `Aktualisiert vor ${minutesAgo} Min`}
+          </span>
           <span className="font-medium text-foreground">Details ansehen</span>
         </CardFooter>
         </Card>

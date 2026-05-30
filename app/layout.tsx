@@ -1,13 +1,13 @@
 import type { Metadata } from "next"
-import { Inter, Geist } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
 import AutoRefresh from './components/AutoRefresh'
 import { FeedbackWidget } from './components/FeedbackWidget'
+import { OfflineBlocker } from './components/OfflineBlocker'
 import { ThemeProvider } from './components/ThemeProvider'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { cn } from "@/lib/utils";
+import ServiceWorkerRegister from './components/ServiceWorkerRegister'
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+// const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -22,14 +22,19 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#0ea5a4" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <TooltipProvider>
+          <OfflineBlocker>
+            <ServiceWorkerRegister />
             <AutoRefresh />
             <FeedbackWidget />
             {children}
-          </TooltipProvider>
+          </OfflineBlocker>
         </ThemeProvider>
       </body>
     </html>

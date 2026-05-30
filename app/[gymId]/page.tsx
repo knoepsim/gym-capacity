@@ -144,29 +144,29 @@ export default async function GymDetailPage({ params }: PageProps) {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">PERSONEN</p>
-                  <p className="mt-2 text-4xl font-bold">{displayCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">AUSLASTUNG</p>
-                  <p className="mt-2 text-4xl font-bold">{utilization}%</p>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">TREND</p>
-                  <p className="mt-2 text-lg font-bold">
-                    {trend === 'up' ? 'Zunehmend' : trend === 'down' ? 'Abnehmend' : 'Gleichbleibend'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">AKTUALISIERT</p>
-                  <p className="mt-2 text-lg">
-                    {latestOccupancy ? new Date(latestOccupancy.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) : '—'}
-                  </p>
-                </div>
-              </div>
-              <Progress value={utilization} />
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+                    <div>
+                      <p className="text-sm font-semibold text-muted-foreground">PERSONEN</p>
+                      <p className="mt-2 text-4xl font-bold">{displayCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-muted-foreground">AUSLASTUNG</p>
+                      <p className="mt-2 text-4xl font-bold">{utilization}%</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-muted-foreground">TREND</p>
+                      <p className="mt-2 text-lg font-bold">
+                        {trend === 'up' ? 'Zunehmend' : trend === 'down' ? 'Abnehmend' : 'Gleichbleibend'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-muted-foreground">AKTUALISIERT</p>
+                      <p className="mt-2 text-lg">
+                        {latestOccupancy ? new Date(latestOccupancy.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <Progress value={utilization} />
             </CardContent>
           </Card>
         )}

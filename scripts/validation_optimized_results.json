@@ -1,0 +1,444 @@
+{
+  "baseline": {
+    "count": 40104,
+    "mae": 13.72,
+    "rmse": 22.31,
+    "cap_err": 7.39,
+    "wape": 14.61,
+    "bias": -3.12,
+    "within_5_pers": 35.4,
+    "within_10_cap": 77.7
+  },
+  "optimized": {
+    "count": 40104,
+    "mae": 11.78,
+    "rmse": 19.81,
+    "cap_err": 6.4,
+    "wape": 12.55,
+    "bias": -3.19,
+    "within_5_pers": 39.5,
+    "within_10_cap": 83.2
+  },
+  "by_horizon": {
+    "0": {
+      "base": {
+        "count": 3996,
+        "mae": 4.62,
+        "rmse": 7.83,
+        "cap_err": 2.27,
+        "wape": 5.62,
+        "bias": -0.31,
+        "within_5_pers": 73.9,
+        "within_10_cap": 98.9
+      },
+      "opt": {
+        "count": 3996,
+        "mae": 4.62,
+        "rmse": 7.83,
+        "cap_err": 2.27,
+        "wape": 5.62,
+        "bias": -0.31,
+        "within_5_pers": 73.9,
+        "within_10_cap": 98.9
+      }
+    },
+    "1": {
+      "base": {
+        "count": 4002,
+        "mae": 16.76,
+        "rmse": 22.73,
+        "cap_err": 8.97,
+        "wape": 19.5,
+        "bias": -1.45,
+        "within_5_pers": 22.9,
+        "within_10_cap": 65.8
+      },
+      "opt": {
+        "count": 4002,
+        "mae": 8.81,
+        "rmse": 13.0,
+        "cap_err": 4.82,
+        "wape": 10.26,
+        "bias": -1.38,
+        "within_5_pers": 43.3,
+        "within_10_cap": 91.0
+      }
+    },
+    "2": {
+      "base": {
+        "count": 4002,
+        "mae": 22.0,
+        "rmse": 31.59,
+        "cap_err": 11.51,
+        "wape": 25.3,
+        "bias": -1.63,
+        "within_5_pers": 19.2,
+        "within_10_cap": 55.9
+      },
+      "opt": {
+        "count": 4002,
+        "mae": 10.7,
+        "rmse": 17.25,
+        "cap_err": 5.82,
+        "wape": 12.3,
+        "bias": -2.61,
+        "within_5_pers": 40.3,
+        "within_10_cap": 85.9
+      }
+    },
+    "3": {
+      "base": {
+        "count": 3504,
+        "mae": 12.05,
+        "rmse": 19.1,
+        "cap_err": 6.56,
+        "wape": 13.06,
+        "bias": -3.1,
+        "within_5_pers": 35.5,
+        "within_10_cap": 82.6
+      },
+      "opt": {
+        "count": 3504,
+        "mae": 11.95,
+        "rmse": 19.0,
+        "cap_err": 6.52,
+        "wape": 12.95,
+        "bias": -2.9,
+        "within_5_pers": 36.0,
+        "within_10_cap": 82.7
+      }
+    },
+    "4": {
+      "base": {
+        "count": 3504,
+        "mae": 12.33,
+        "rmse": 20.11,
+        "cap_err": 6.73,
+        "wape": 13.56,
+        "bias": -3.37,
+        "within_5_pers": 36.1,
+        "within_10_cap": 81.7
+      },
+      "opt": {
+        "count": 3504,
+        "mae": 12.31,
+        "rmse": 20.08,
+        "cap_err": 6.72,
+        "wape": 13.54,
+        "bias": -3.28,
+        "within_5_pers": 36.2,
+        "within_10_cap": 81.6
+      }
+    },
+    "5": {
+      "base": {
+        "count": 3006,
+        "mae": 12.72,
+        "rmse": 20.09,
+        "cap_err": 6.94,
+        "wape": 13.24,
+        "bias": -3.52,
+        "within_5_pers": 33.8,
+        "within_10_cap": 80.7
+      },
+      "opt": {
+        "count": 3006,
+        "mae": 12.71,
+        "rmse": 20.08,
+        "cap_err": 6.93,
+        "wape": 13.23,
+        "bias": -3.52,
+        "within_5_pers": 33.8,
+        "within_10_cap": 80.8
+      }
+    },
+    "6": {
+      "base": {
+        "count": 3006,
+        "mae": 12.97,
+        "rmse": 21.17,
+        "cap_err": 7.08,
+        "wape": 13.76,
+        "bias": -3.74,
+        "within_5_pers": 34.9,
+        "within_10_cap": 80.2
+      },
+      "opt": {
+        "count": 3006,
+        "mae": 12.97,
+        "rmse": 21.17,
+        "cap_err": 7.08,
+        "wape": 13.76,
+        "bias": -3.74,
+        "within_5_pers": 34.9,
+        "within_10_cap": 80.2
+      }
+    },
+    "7": {
+      "base": {
+        "count": 2508,
+        "mae": 13.53,
+        "rmse": 21.35,
+        "cap_err": 7.37,
+        "wape": 13.35,
+        "bias": -3.92,
+        "within_5_pers": 31.7,
+        "within_10_cap": 78.5
+      },
+      "opt": {
+        "count": 2508,
+        "mae": 13.53,
+        "rmse": 21.35,
+        "cap_err": 7.37,
+        "wape": 13.35,
+        "bias": -3.92,
+        "within_5_pers": 31.7,
+        "within_10_cap": 78.5
+      }
+    },
+    "8": {
+      "base": {
+        "count": 2508,
+        "mae": 13.71,
+        "rmse": 22.45,
+        "cap_err": 7.46,
+        "wape": 13.78,
+        "bias": -4.22,
+        "within_5_pers": 33.6,
+        "within_10_cap": 78.6
+      },
+      "opt": {
+        "count": 2508,
+        "mae": 13.71,
+        "rmse": 22.45,
+        "cap_err": 7.46,
+        "wape": 13.78,
+        "bias": -4.22,
+        "within_5_pers": 33.6,
+        "within_10_cap": 78.6
+      }
+    },
+    "9": {
+      "base": {
+        "count": 2010,
+        "mae": 14.47,
+        "rmse": 22.84,
+        "cap_err": 7.86,
+        "wape": 13.28,
+        "bias": -4.4,
+        "within_5_pers": 30.0,
+        "within_10_cap": 76.2
+      },
+      "opt": {
+        "count": 2010,
+        "mae": 14.47,
+        "rmse": 22.84,
+        "cap_err": 7.86,
+        "wape": 13.28,
+        "bias": -4.4,
+        "within_5_pers": 30.0,
+        "within_10_cap": 76.2
+      }
+    },
+    "10": {
+      "base": {
+        "count": 2010,
+        "mae": 14.47,
+        "rmse": 23.94,
+        "cap_err": 7.86,
+        "wape": 13.84,
+        "bias": -4.52,
+        "within_5_pers": 33.4,
+        "within_10_cap": 77.0
+      },
+      "opt": {
+        "count": 2010,
+        "mae": 14.47,
+        "rmse": 23.94,
+        "cap_err": 7.86,
+        "wape": 13.84,
+        "bias": -4.52,
+        "within_5_pers": 33.4,
+        "within_10_cap": 77.0
+      }
+    },
+    "11": {
+      "base": {
+        "count": 1512,
+        "mae": 15.22,
+        "rmse": 24.39,
+        "cap_err": 8.25,
+        "wape": 13.31,
+        "bias": -4.62,
+        "within_5_pers": 29.0,
+        "within_10_cap": 74.7
+      },
+      "opt": {
+        "count": 1512,
+        "mae": 15.22,
+        "rmse": 24.39,
+        "cap_err": 8.25,
+        "wape": 13.31,
+        "bias": -4.62,
+        "within_5_pers": 29.0,
+        "within_10_cap": 74.7
+      }
+    },
+    "12": {
+      "base": {
+        "count": 1512,
+        "mae": 14.57,
+        "rmse": 25.1,
+        "cap_err": 7.92,
+        "wape": 14.35,
+        "bias": -4.59,
+        "within_5_pers": 34.5,
+        "within_10_cap": 77.6
+      },
+      "opt": {
+        "count": 1512,
+        "mae": 14.57,
+        "rmse": 25.1,
+        "cap_err": 7.92,
+        "wape": 14.35,
+        "bias": -4.59,
+        "within_5_pers": 34.5,
+        "within_10_cap": 77.6
+      }
+    }
+  },
+  "by_gym": {
+    "freiburg-sued-sportprinz": {
+      "base": {
+        "count": 6684,
+        "mae": 13.13,
+        "rmse": 18.7,
+        "cap_err": 8.21,
+        "wape": 14.69,
+        "bias": -1.09,
+        "within_5_pers": 34.4,
+        "within_10_cap": 71.0
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 11.61,
+        "rmse": 16.98,
+        "cap_err": 7.26,
+        "wape": 12.99,
+        "bias": -0.6,
+        "within_5_pers": 39.0,
+        "within_10_cap": 76.2
+      }
+    },
+    "freiburg-west": {
+      "base": {
+        "count": 6684,
+        "mae": 16.04,
+        "rmse": 32.19,
+        "cap_err": 10.02,
+        "wape": 22.86,
+        "bias": -4.15,
+        "within_5_pers": 35.3,
+        "within_10_cap": 73.1
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 14.32,
+        "rmse": 31.12,
+        "cap_err": 8.95,
+        "wape": 20.42,
+        "bias": -5.25,
+        "within_5_pers": 39.6,
+        "within_10_cap": 79.3
+      }
+    },
+    "freiburg-west-sportpark": {
+      "base": {
+        "count": 6684,
+        "mae": 20.96,
+        "rmse": 29.52,
+        "cap_err": 5.99,
+        "wape": 11.4,
+        "bias": -9.26,
+        "within_5_pers": 22.8,
+        "within_10_cap": 81.8
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 17.04,
+        "rmse": 23.27,
+        "cap_err": 4.87,
+        "wape": 9.27,
+        "bias": -7.58,
+        "within_5_pers": 26.3,
+        "within_10_cap": 87.6
+      }
+    },
+    "hugstetten-sportpark": {
+      "base": {
+        "count": 6684,
+        "mae": 9.03,
+        "rmse": 12.88,
+        "cap_err": 5.65,
+        "wape": 13.91,
+        "bias": -2.6,
+        "within_5_pers": 45.6,
+        "within_10_cap": 85.4
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 7.8,
+        "rmse": 11.23,
+        "cap_err": 4.88,
+        "wape": 12.02,
+        "bias": -3.1,
+        "within_5_pers": 50.1,
+        "within_10_cap": 89.5
+      }
+    },
+    "karlsruhe-sued": {
+      "base": {
+        "count": 6684,
+        "mae": 11.64,
+        "rmse": 16.1,
+        "cap_err": 7.27,
+        "wape": 12.19,
+        "bias": 1.55,
+        "within_5_pers": 34.2,
+        "within_10_cap": 75.9
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 9.78,
+        "rmse": 13.43,
+        "cap_err": 6.11,
+        "wape": 10.24,
+        "bias": 0.87,
+        "within_5_pers": 38.3,
+        "within_10_cap": 82.6
+      }
+    },
+    "karlsruhe-west-sportprinz": {
+      "base": {
+        "count": 6684,
+        "mae": 11.51,
+        "rmse": 17.42,
+        "cap_err": 7.19,
+        "wape": 19.29,
+        "bias": -3.19,
+        "within_5_pers": 39.8,
+        "within_10_cap": 78.9
+      },
+      "opt": {
+        "count": 6684,
+        "mae": 10.15,
+        "rmse": 15.84,
+        "cap_err": 6.34,
+        "wape": 17.01,
+        "bias": -3.47,
+        "within_5_pers": 44.0,
+        "within_10_cap": 83.9
+      }
+    }
+  }
+}

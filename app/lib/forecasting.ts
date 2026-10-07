@@ -228,8 +228,8 @@ export function inferOpeningHoursFromBuckets(dayBuckets: Map<string, DayBucket>)
       for (let h = 0; h < 24; h++) {
         const meanVal = r[h]
         const varFlag = r[h + half]
-        // count hour as active if it shows variability OR a substantial mean
-        if (varFlag >= 1 || meanVal >= 3) hourScores[h] += 1
+        // count hour as active if it shows turnover / variability
+        if (varFlag >= 1) hourScores[h] += 1
       }
     }
 
@@ -259,12 +259,46 @@ export function inferOpeningHoursFromBuckets(dayBuckets: Map<string, DayBucket>)
   return result
 }
 
+const dayNameMap: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' }
+
+export function getOpeningHoursForGym(gymId: string): OpeningHours | null {
+  const gym = (gyms as Array<{ id: string; openingHours?: Record<string, string> }>).find((g) => g.id === gymId)
+  if (!gym || !gym.openingHours) return null
+
+  const result: OpeningHours = {}
+  for (let wd = 0; wd < 7; wd++) {
+    const dayKey = dayNameMap[wd]
+    const timeStr = gym.openingHours[dayKey]
+    if (!timeStr || timeStr === 'closed') {
+      result[wd] = null
+      continue
+    }
+
+    const parts = timeStr.split('-')
+    if (parts.length !== 2) {
+      result[wd] = null
+      continue
+    }
+
+    const openHour = Number(parts[0].split(':')[0])
+    const closeHour = Number(parts[1].split(':')[0])
+
+    if (closeHour >= 24 || (openHour === 0 && closeHour === 0)) {
+      result[wd] = { open: 0, close: 23 }
+    } else {
+      // E.g. "07:00-23:00" -> open 7, close 22 (last open hour is 22:00-22:59)
+      result[wd] = { open: openHour, close: Math.max(openHour, closeHour - 1) }
+    }
+  }
+
+  return result
+}
+
 export function compareWithConfigOpening(gymId: string, inferred: OpeningHours) {
   const config = (gyms as any[]).find((g) => g.id === gymId)
   if (!config || !config.openingHours) return
 
   // config.openingHours expected like { Mon: '06:00-22:00', ... }
-  const dayNameMap: Record<number, string> = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' }
   const problems: string[] = []
 
   for (let wd = 0; wd < 7; wd++) {
@@ -356,7 +390,7 @@ export async function buildStableAggregatedData(
 ): Promise<StableAggregatedPoint[]> {
   const rows = await fetchHistory(prisma, gymId, lookbackDays)
   const { weekdayHourProfile, hourProfile, overallProfile, maxCapacity, dayBuckets } = buildProfiles(rows)
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
+  const inferredOpening = getOpeningHoursForGym(gymId) ?? inferOpeningHoursFromBuckets(dayBuckets)
   compareWithConfigOpening(gymId, inferredOpening)
 
   return Array.from({ length: 7 }, (_, weekday) =>
@@ -373,7 +407,7 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
   const rows = await fetchHistory(prisma, gymId, 56)
   const { weekdayHourProfile, hourProfile, overallProfile, dayBuckets } = buildProfiles(rows)
 
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
+  const inferredOpening = getOpeningHoursForGym(gymId) ?? inferOpeningHoursFromBuckets(dayBuckets)
   compareWithConfigOpening(gymId, inferredOpening)
 
   const todayKey = getBerlinDateKey(new Date())
@@ -437,9 +471,13 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
 
   return Array.from({ length: 24 }, (_, hour) => {
     const actual = actualByHour.get(hour) ?? null
+    const isOpenThisHour = withinOpeningHours(inferredOpening, todayWeekday, hour)
     let forecast: number | null = null
 
-    if (hour < currentHourBerlin) {
+    if (!isOpenThisHour) {
+      // closed hours: forecast is 0
+      forecast = 0
+    } else if (hour < currentHourBerlin) {
       // past hours: keep null for forecast
       forecast = null
     } else if (hour === currentHourBerlin) {
@@ -467,7 +505,7 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
 
     return {
       hour,
-      actual_count: actual !== null ? Math.round(actual) : null,
+      actual_count: !isOpenThisHour ? (actual !== null ? 0 : null) : (actual !== null ? Math.round(actual) : null),
       forecast_count: forecast,
     }
   })
@@ -516,9 +554,12 @@ export async function buildStableTrendDirection(
   // baseline expectation for current hour
   const rows = await fetchHistory(prisma, gymId, 56)
   const { weekdayHourProfile, hourProfile, overallProfile, dayBuckets } = buildProfiles(rows)
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
+  const inferredOpening = getOpeningHoursForGym(gymId) ?? inferOpeningHoursFromBuckets(dayBuckets)
   const weekday = getBerlinWeekday(timestamp)
   const hour = getBerlinHour(timestamp)
+
+  if (!withinOpeningHours(inferredOpening, weekday, hour)) return 'equal'
+
   const expected = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, weekday, hour, inferredOpening)
   const tolerance = Math.max(3, expected * fallbackTolerance)
   if (currentCount > expected + tolerance && slopePer10Min > 1) return 'up'

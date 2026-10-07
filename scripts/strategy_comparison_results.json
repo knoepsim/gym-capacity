@@ -1,0 +1,62 @@
+{
+  "Baseline (Original)": {
+    "mae": 13.72,
+    "rmse": 22.31,
+    "cap_err": 7.39,
+    "wape": 14.61,
+    "bias": -3.12,
+    "within_10": 77.7,
+    "mae_1h": 16.76,
+    "mae_2h": 22.0
+  },
+  "Strategy 1: No Slope (Pure Blend 0.6)": {
+    "mae": 12.24,
+    "rmse": 20.34,
+    "cap_err": 6.63,
+    "wape": 13.04,
+    "bias": -3.54,
+    "within_10": 81.9,
+    "mae_1h": 11.9,
+    "mae_2h": 12.07
+  },
+  "Strategy 2: Delta Decay (0.5x, 0.2x)": {
+    "mae": 11.92,
+    "rmse": 19.96,
+    "cap_err": 6.47,
+    "wape": 12.7,
+    "bias": -3.34,
+    "within_10": 82.8,
+    "mae_1h": 9.54,
+    "mae_2h": 11.25
+  },
+  "Strategy 3: Delta Decay + Damped Slope (0.2x slope, max +/-5% cap)": {
+    "mae": 11.91,
+    "rmse": 19.93,
+    "cap_err": 6.47,
+    "wape": 12.68,
+    "bias": -3.3,
+    "within_10": 82.9,
+    "mae_1h": 9.37,
+    "mae_2h": 11.25
+  },
+  "Strategy 4: Pure Baseline for +1h & +2h": {
+    "mae": 12.23,
+    "rmse": 20.47,
+    "cap_err": 6.64,
+    "wape": 13.02,
+    "bias": -3.51,
+    "within_10": 82.0,
+    "mae_1h": 11.77,
+    "mae_2h": 12.07
+  },
+  "Strategy 5: Recency Weighted (Lookback 42d) + Delta Decay": {
+    "mae": 12.04,
+    "rmse": 20.08,
+    "cap_err": 6.55,
+    "wape": 12.83,
+    "bias": -3.38,
+    "within_10": 82.0,
+    "mae_1h": 9.66,
+    "mae_2h": 11.4
+  }
+}

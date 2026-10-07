@@ -9,3 +9,5 @@ dist
 .idea
 *.swp
 .prisma
+test/
+__pycache__/

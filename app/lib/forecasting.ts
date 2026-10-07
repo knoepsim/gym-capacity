@@ -181,12 +181,13 @@ export function buildProfiles(rows: OccupancyHistoryRow[]): {
         continue
       }
 
+      weekdayHourProfile[bucket.weekday][hour].push(value)
+      hourProfile[hour].push(value)
+
       if (rampStart !== null && hour >= rampStart && hour <= rampStart + 1) {
         continue
       }
 
-      weekdayHourProfile[bucket.weekday][hour].push(value)
-      hourProfile[hour].push(value)
       overallProfile.push(value)
     }
   }
@@ -427,6 +428,13 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
   const currentHourSamples = todayBucket ? (todayBucket.hourlyValues.get(currentHourBerlin) ?? []).slice(-12).map((v) => Number(v)) : []
   const nowcastCurrent = currentHourSamples.length > 0 ? ewma(currentHourSamples, 0.45) : null
 
+  const baselineCurrent = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, currentHourBerlin, inferredOpening)
+  const currentDelta = nowcastCurrent !== null && currentHourSamples.length >= 2 ? nowcastCurrent - baselineCurrent : 0
+  const maxCapacity = dayBuckets.values().next().value?.maxCapacity ?? 160
+  const maxSlopeAdj = Math.round(maxCapacity * 0.05)
+  // Damp slope (0.2 factor) and bound by +/-5% max capacity to prevent overshooting
+  const dampedSlopeAdj = Math.max(-maxSlopeAdj, Math.min(Math.round(slopePer10Min * 6 * 0.2), maxSlopeAdj))
+
   return Array.from({ length: 24 }, (_, hour) => {
     const actual = actualByHour.get(hour) ?? null
     let forecast: number | null = null
@@ -439,32 +447,22 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
       if (nowcastCurrent !== null && currentHourSamples.length >= 2) {
         forecast = Math.round(nowcastCurrent)
       } else {
-        forecast = Math.round(resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening))
+        forecast = Math.round(baselineCurrent)
       }
     } else if (hour === currentHourBerlin + 1) {
-      // next hour: prefer short-term signal (nowcast) blended with baseline
+      // next hour: autoregressive delta decay (50% of today's current deviation) + bounded micro-slope
       const baseline = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
-      if (nowcastCurrent !== null && currentHourSamples.length >= 3) {
-        // weight nowcast higher when we have enough samples
-        const weightNow = 0.7
-        const blended = Math.round(weightNow * nowcastCurrent + (1 - weightNow) * baseline)
-        // nudge by recent slope (project slope over 60 minutes)
-        const slopeAdj = Math.round(slopePer10Min * 6)
-        forecast = Math.max(0, Math.min(blended + slopeAdj, dayBuckets.values().next().value?.maxCapacity ?? blended + slopeAdj))
-      } else {
-        const slopeAdj = Math.round(slopePer10Min * 6)
-        forecast = Math.max(0, Math.min(Math.round(baseline) + slopeAdj, dayBuckets.values().next().value?.maxCapacity ?? Math.round(baseline) + slopeAdj))
-      }
+      const projected = Math.round(baseline + 0.5 * currentDelta) + dampedSlopeAdj
+      forecast = Math.max(0, Math.min(projected, maxCapacity))
+    } else if (hour === currentHourBerlin + 2) {
+      // +2h: autoregressive delta decay (20% of today's current deviation) mean-reverting toward baseline
+      const baseline = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
+      const projected = Math.round(baseline + 0.2 * currentDelta)
+      forecast = Math.max(0, Math.min(projected, maxCapacity))
     } else {
       // further future hours: use stable baseline
-      // for hours up to +2 apply a weaker slope projection
       const base = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
-      if (hour === currentHourBerlin + 2) {
-        const slopeAdj = Math.round(slopePer10Min * 12 * 0.5) // half weight
-        forecast = Math.max(0, Math.min(Math.round(base) + slopeAdj, dayBuckets.values().next().value?.maxCapacity ?? Math.round(base) + slopeAdj))
-      } else {
-        forecast = Math.round(base)
-      }
+      forecast = Math.round(base)
     }
 
     return {

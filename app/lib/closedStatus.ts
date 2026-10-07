@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import gyms from '@/config/gyms.json'
+import { getInferredOpeningForGym, type OpeningHours } from './forecasting'
 
 export interface ClosedStatus {
   isLikelyClosed: boolean
@@ -33,66 +33,48 @@ export function getBerlinTimeParts(date: Date = new Date()) {
   return { weekday, hour, minute, minutesFromMidnight: hour * 60 + minute }
 }
 
-function parseMinutes(timeStr: string): number {
-  const [h, m] = timeStr.split(':').map(Number)
-  return (h ?? 0) * 60 + (m ?? 0)
-}
-
-export function isGym24h(gymId: string): boolean {
-  const gym = (gyms as Array<{ id: string; openingHours?: Record<string, string> }>).find((g) => g.id === gymId)
-  if (!gym || !gym.openingHours) return false
-  return Object.values(gym.openingHours).every((v) => v === '00:00-24:00' || v === '00:00-00:00')
+export function isGym24h(opening: OpeningHours | null): boolean {
+  if (!opening) return false
+  return Object.values(opening).some((day) => day?.is24h === true)
 }
 
 export function isOutsideOpeningHours(
-  gymId: string,
+  opening: OpeningHours | null,
   date: Date = new Date()
 ): { isClosed: boolean; stableMinutes: number; reason?: 'schedule' } {
-  const gym = (gyms as Array<{ id: string; openingHours?: Record<string, string> }>).find((g) => g.id === gymId)
-  if (!gym || !gym.openingHours) {
+  if (!opening) {
     return { isClosed: false, stableMinutes: 0 }
   }
 
-  const { weekday, minutesFromMidnight } = getBerlinTimeParts(date)
-  const scheduleStr = gym.openingHours[weekday]
+  const { weekday, hour, minute } = getBerlinTimeParts(date)
+  const weekdayIndex = WEEKDAY_NAMES.indexOf(weekday)
+  const todayOpening = opening[weekdayIndex]
 
-  if (!scheduleStr || scheduleStr === 'closed') {
-    return { isClosed: true, stableMinutes: 1440, reason: 'schedule' }
+  if (!todayOpening) {
+    return { isClosed: true, stableMinutes: hour * 60 + minute, reason: 'schedule' }
   }
 
-  const parts = scheduleStr.split('-')
-  if (parts.length !== 2) {
+  if (todayOpening.is24h) {
     return { isClosed: false, stableMinutes: 0 }
   }
 
-  const openMinutes = parseMinutes(parts[0])
-  const closeMinutes = parseMinutes(parts[1])
+  const openHour = todayOpening.open
+  const closeHour = todayOpening.close + 1 // close is last active hour (e.g. 22 means 22:00-22:59, so close at 23:00)
 
-  // 24h gym case (e.g. 00:00-24:00)
-  if (openMinutes === 0 && (closeMinutes >= 1440 || parts[1] === '24:00')) {
+  // Inside inferred opening hours
+  if (hour >= openHour && hour < closeHour) {
     return { isClosed: false, stableMinutes: 0 }
   }
 
-  // Inside scheduled opening hours: [openMinutes, closeMinutes)
-  if (minutesFromMidnight >= openMinutes && minutesFromMidnight < closeMinutes) {
-    return { isClosed: false, stableMinutes: 0 }
-  }
-
-  // Outside scheduled opening hours
+  // Outside inferred opening hours
   let stableMinutes = 0
-  if (minutesFromMidnight >= closeMinutes) {
-    // Closed earlier today
-    stableMinutes = minutesFromMidnight - closeMinutes
+  if (hour >= closeHour) {
+    stableMinutes = (hour - closeHour) * 60 + minute
   } else {
-    // Before opening today -> gym closed previous day
-    const prevWeekday = WEEKDAY_NAMES[(WEEKDAY_NAMES.indexOf(weekday) + 6) % 7]
-    const prevScheduleStr = gym.openingHours[prevWeekday]
-    let prevCloseMinutes = 23 * 60 // fallback default
-    if (prevScheduleStr && prevScheduleStr.includes('-')) {
-      prevCloseMinutes = parseMinutes(prevScheduleStr.split('-')[1])
-      if (prevCloseMinutes > 1440) prevCloseMinutes = 1440
-    }
-    stableMinutes = (1440 - prevCloseMinutes) + minutesFromMidnight
+    const prevWeekdayIndex = (weekdayIndex + 6) % 7
+    const prevOpening = opening[prevWeekdayIndex]
+    const prevCloseHour = prevOpening ? (prevOpening.is24h ? 24 : prevOpening.close + 1) : 23
+    stableMinutes = (24 - prevCloseHour) * 60 + (hour * 60 + minute)
   }
 
   return { isClosed: true, stableMinutes, reason: 'schedule' }
@@ -101,10 +83,13 @@ export function isOutsideOpeningHours(
 export async function detectLikelyClosed(
   prisma: PrismaClient,
   gymId: string,
-  referenceDate: Date = new Date()
+  referenceDate: Date = new Date(),
+  inferredOpening?: OpeningHours
 ): Promise<ClosedStatus> {
-  // 1. Primary check: Scheduled opening hours from configuration
-  const scheduleCheck = isOutsideOpeningHours(gymId, referenceDate)
+  // 1. Primary check: Purely automated opening hours inferred from historical turnover
+  const opening = inferredOpening ?? (await getInferredOpeningForGym(prisma, gymId))
+  const scheduleCheck = isOutsideOpeningHours(opening, referenceDate)
+
   if (scheduleCheck.isClosed) {
     const latest = await prisma.occupancy.findFirst({
       where: {
@@ -124,7 +109,7 @@ export async function detectLikelyClosed(
     }
   }
 
-  // 2. Secondary check: Dynamic stagnation / unexpected closure during scheduled hours
+  // 2. Secondary check: Dynamic stagnation / unexpected closure during open hours
   const windowStart = new Date(referenceDate.getTime() - CLOSED_MIN_STABLE_MINUTES * 60 * 1000)
 
   const samples = await prisma.occupancy.findMany({
@@ -159,14 +144,15 @@ export async function detectLikelyClosed(
   const maxCount = Math.max(...counts)
   const countSpread = maxCount - minCount
 
-  const is24h = isGym24h(gymId)
+  const is24h = isGym24h(opening)
   let isLikelyClosed = false
 
   if (is24h) {
     // 24h gym: only flag closed if occupancy is flat 0 for at least 180 minutes
     isLikelyClosed = newest.count === 0 && maxCount === 0 && stableMinutes >= 180
   } else {
-    // Regular gym during open hours: flat 0 for >= 60 min, or frozen counter for >= CLOSED_MIN_STABLE_MINUTES
+    // Regular gym during open hours:
+    // Only flag closed if count is flat 0 for >= 60 min, or frozen counter for >= CLOSED_MIN_STABLE_MINUTES (180 min)
     if (newest.count === 0 && maxCount === 0 && stableMinutes >= 60) {
       isLikelyClosed = true
     } else if (countSpread <= 1 && stableMinutes >= CLOSED_MIN_STABLE_MINUTES && newest.count > 0) {

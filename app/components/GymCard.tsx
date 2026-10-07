@@ -123,13 +123,8 @@ export function GymCard({
             <Progress value={percentage} className="h-2.5" />
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{percentage}% ausgelastet</span>
-              <span>{available} verfugbar</span>
+              <span>{available} verfügbar</span>
             </div>
-            {isLikelyClosed && (
-              <p className="text-xs text-amber-700">
-                Count seit ca. {closedStableMinutes} Min unverandert. Anzeige auf 0 gesetzt.
-              </p>
-            )}
           </div>
 
           {!isLikelyClosed ? (

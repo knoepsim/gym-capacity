@@ -469,6 +469,7 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
   // Damp slope (0.2 factor) and bound by +/-5% max capacity to prevent overshooting
   const dampedSlopeAdj = Math.max(-maxSlopeAdj, Math.min(Math.round(slopePer10Min * 6 * 0.2), maxSlopeAdj))
 
+  return Array.from({ length: 24 }, (_, hour) => {
     const actual = actualByHour.get(hour) ?? null
     const isOpenThisHour = withinOpeningHours(inferredOpening, todayWeekday, hour)
     let forecast: number | null = null

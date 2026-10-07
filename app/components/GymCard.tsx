@@ -56,8 +56,8 @@ export function GymCard({
   const now = new Date()
   const currentHour = Number(
     new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      hour12: false,
+      hour: 'numeric',
+      hourCycle: 'h23',
       timeZone: 'Europe/Berlin',
     }).format(now)
   )

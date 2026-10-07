@@ -469,26 +469,22 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
   // Damp slope (0.2 factor) and bound by +/-5% max capacity to prevent overshooting
   const dampedSlopeAdj = Math.max(-maxSlopeAdj, Math.min(Math.round(slopePer10Min * 6 * 0.2), maxSlopeAdj))
 
-  return Array.from({ length: 24 }, (_, hour) => {
     const actual = actualByHour.get(hour) ?? null
     const isOpenThisHour = withinOpeningHours(inferredOpening, todayWeekday, hour)
     let forecast: number | null = null
 
-    if (!isOpenThisHour) {
-      // closed hours: forecast is 0
-      forecast = 0
-    } else if (hour < currentHourBerlin) {
-      // past hours: keep null for forecast
+    if (hour < currentHourBerlin) {
+      // Past hours: NO forecast! Must strictly be null so forecast line only starts from now
       forecast = null
+    } else if (!isOpenThisHour) {
+      // Future hours that are closed: forecast drops to 0
+      forecast = 0
     } else if (hour === currentHourBerlin) {
-      // current hour: use intra-hour nowcast if available, otherwise baseline
-      if (nowcastCurrent !== null && currentHourSamples.length >= 2) {
-        forecast = Math.round(nowcastCurrent)
-      } else {
-        forecast = Math.round(baselineCurrent)
-      }
+      // Current hour: anchor forecast to live actual count if available, otherwise nowcast / baseline
+      const liveActual = actual !== null ? Math.round(actual) : null
+      forecast = liveActual ?? (nowcastCurrent !== null && currentHourSamples.length >= 2 ? Math.round(nowcastCurrent) : Math.round(baselineCurrent))
     } else if (hour === currentHourBerlin + 1) {
-      // next hour: autoregressive delta decay (50% of today's current deviation) + bounded micro-slope
+      // Next hour: autoregressive delta decay (50% of today's current deviation) + bounded micro-slope
       const baseline = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
       const projected = Math.round(baseline + 0.5 * currentDelta) + dampedSlopeAdj
       forecast = Math.max(0, Math.min(projected, maxCapacity))
@@ -498,14 +494,14 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
       const projected = Math.round(baseline + 0.2 * currentDelta)
       forecast = Math.max(0, Math.min(projected, maxCapacity))
     } else {
-      // further future hours: use stable baseline
+      // Further future hours: use stable baseline
       const base = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
       forecast = Math.round(base)
     }
 
     return {
       hour,
-      actual_count: !isOpenThisHour ? (actual !== null ? 0 : null) : (actual !== null ? Math.round(actual) : null),
+      actual_count: hour > currentHourBerlin ? null : (!isOpenThisHour ? (actual !== null ? 0 : null) : (actual !== null ? Math.round(actual) : null)),
       forecast_count: forecast,
     }
   })

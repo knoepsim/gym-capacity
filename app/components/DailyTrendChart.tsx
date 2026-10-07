@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -37,9 +38,33 @@ function formatHourRange(value: unknown): string {
 }
 
 export function DailyTrendChart({ data, height = 240 }: DailyTrendChartProps) {
+  const currentBerlinHour = useMemo(() => {
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Berlin',
+        hour: 'numeric',
+        hourCycle: 'h23',
+      })
+      return Number(formatter.format(new Date()))
+    } catch {
+      return new Date().getHours()
+    }
+  }, [])
+
+  // Strictly filter:
+  // - actual_count is only past & current (hour <= currentBerlinHour)
+  // - forecast_count is strictly current & future (hour >= currentBerlinHour)
+  const chartData = useMemo(() => {
+    return data.map((d) => ({
+      ...d,
+      actual_count: d.hour > currentBerlinHour ? null : d.actual_count,
+      forecast_count: d.hour < currentBerlinHour ? null : d.forecast_count,
+    }))
+  }, [data, currentBerlinHour])
+
   return (
     <ChartContainer config={dailyTrendConfig} className="w-full" style={{ height }}>
-      <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <XAxis
           dataKey="hour"
@@ -70,7 +95,6 @@ export function DailyTrendChart({ data, height = 240 }: DailyTrendChartProps) {
         <Area
           type="monotone"
           dataKey="forecast_count"
-          connectNulls
           stroke="var(--color-forecast_count)"
           fill="none"
           strokeWidth={2}
@@ -80,3 +104,4 @@ export function DailyTrendChart({ data, height = 240 }: DailyTrendChartProps) {
     </ChartContainer>
   );
 }
+

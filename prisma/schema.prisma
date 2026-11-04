@@ -12,37 +12,60 @@ datasource db {
 }
 
 model Gym {
-  id        String      @id
-  name      String
-  url       String      @unique
-  occupancy Occupancy[]
-  feedbacks GymFeedback[]
+  id             String             @id
+  name           String
+  url            String             @unique
+  provider       String             @default("clubconnector") // clubconnector | fitx
+  unit           String             @default("persons") // persons | percent (FitX only reports a percentage)
+  region         String? // federal state code, e.g. BW (drives the poll interval)
+  city           String?
+  active         Boolean            @default(true) // false: not polled (e.g. FitX studio not open yet)
+  occupancy      Occupancy[]
+  hourly         OccupancyHourly[]
+  feedbacks      GymFeedback[]
   analyticsCache GymAnalyticsCache?
-  
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Occupancy {
   id        Int      @id @default(autoincrement())
   gymId     String
-  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  count     Int      // Aktuelle Anzahl Personen
-  maxCount  Int      // Maximale Kapazität
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  count     Int // Aktuelle Anzahl Personen
+  maxCount  Int // Maximale Kapazität
   timestamp DateTime @default(now())
 
   @@index([gymId, timestamp])
   @@index([timestamp])
 }
 
+// Derived hourly rollup of the (ghost-corrected) occupancy. Raw rows in Occupancy stay the source of truth;
+// this table only exists so long-range profiles do not rescan the whole raw history every few minutes.
+model OccupancyHourly {
+  gymId     String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  hourStart DateTime // start of the hour (UTC)
+  localDay  String // Europe/Berlin date, YYYY-MM-DD
+  weekday   Int // calendar weekday of localDay (0 = Sunday), holidays are mapped at read time
+  hour      Int // Europe/Berlin hour
+  meanCount Float
+  samples   Int
+  maxCount  Int
+
+  @@id([gymId, hourStart])
+}
+
 model GymFeedback {
   id             Int      @id @default(autoincrement())
   gymId          String
-  gym            Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
-  occupancyCount Int?
-  waitTimeRating  Int?
-  densityRating   Int?
-  wouldGoRating   Int?
+  gym            Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  occupancyCount Int? // raw counter value at submission time
+  estimatedCount Int? // persons on site as estimated by the member (optional)
+  waitTimeRating Int?
+  densityRating  Int?
+  wouldGoRating  Int?
   comment        String?
   sourcePath     String?
   createdAt      DateTime @default(now())
@@ -52,11 +75,11 @@ model GymFeedback {
 }
 
 model GymAnalyticsCache {
-  gymId                String   @id
-  gym                  Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  gymId                 String    @id
+  gym                   Gym       @relation(fields: [gymId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   sourceLatestTimestamp DateTime?
-  payload              Json
-  computedAt           DateTime @updatedAt
+  payload               Json
+  computedAt            DateTime  @updatedAt
 
   @@index([computedAt])
 }

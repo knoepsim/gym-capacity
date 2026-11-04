@@ -20,7 +20,7 @@ export default function AssetsInfoPage() {
 
             <div className="mb-6 rounded-lg border border-border bg-muted/40 p-4">
               <p className="mb-2 text-sm font-semibold">Beispiele</p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
+              <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
               <li>public/test2.txt -&gt; /test2.txt</li>
               <li>public/logo.png -&gt; /logo.png</li>
               <li>public/downloads/broschuere.pdf -&gt; /downloads/broschuere.pdf</li>

@@ -8,12 +8,10 @@ import { useDataGrid } from '@/hooks/use-data-grid'
 type FeedbackGridRow = {
   id: number
   createdAtLabel: string
-  waitTimeRating: number | null
-  densityRating: number | null
-  wouldGoRating: number | null
+  impression: string | null
+  estimatedCount: number | null
   occupancyCount: number | null
   comment: string | null
-  sourcePath: string | null
 }
 
 interface FeedbackGymGridProps {
@@ -27,85 +25,31 @@ export function FeedbackGymGrid({ entries }: FeedbackGymGridProps) {
         id: 'createdAtLabel',
         accessorKey: 'createdAtLabel',
         header: 'Zeitpunkt',
-        meta: {
-          label: 'Zeitpunkt',
-          cell: {
-            variant: 'short-text',
-          },
-        },
+        meta: { label: 'Zeitpunkt', cell: { variant: 'short-text' } },
       },
       {
-        id: 'waitTimeRating',
-        accessorKey: 'waitTimeRating',
-        header: 'Wartezeit',
-        meta: {
-          label: 'Wartezeit',
-          cell: {
-            variant: 'number',
-            min: 1,
-            max: 5,
-          },
-        },
+        id: 'impression',
+        accessorKey: 'impression',
+        header: 'Eindruck',
+        meta: { label: 'Eindruck', cell: { variant: 'short-text' } },
       },
       {
-        id: 'densityRating',
-        accessorKey: 'densityRating',
-        header: 'Dichte',
-        meta: {
-          label: 'Dichte',
-          cell: {
-            variant: 'number',
-            min: 1,
-            max: 5,
-          },
-        },
-      },
-      {
-        id: 'wouldGoRating',
-        accessorKey: 'wouldGoRating',
-        header: 'Reingehen',
-        meta: {
-          label: 'Reingehen',
-          cell: {
-            variant: 'number',
-            min: 1,
-            max: 5,
-          },
-        },
+        id: 'estimatedCount',
+        accessorKey: 'estimatedCount',
+        header: 'Geschätzt',
+        meta: { label: 'Geschätzt', cell: { variant: 'number', min: 0 } },
       },
       {
         id: 'occupancyCount',
         accessorKey: 'occupancyCount',
-        header: 'Aktuelle Belegung',
-        meta: {
-          label: 'Aktuelle Belegung',
-          cell: {
-            variant: 'number',
-            min: 0,
-          },
-        },
+        header: 'Zähler (roh)',
+        meta: { label: 'Zähler (roh)', cell: { variant: 'number', min: 0 } },
       },
       {
         id: 'comment',
         accessorKey: 'comment',
-        header: 'Kommentar',
-        meta: {
-          label: 'Kommentar',
-          cell: {
-            variant: 'long-text',
-          },
-        },
-      },
-      {
-        id: 'sourcePath',
-        accessorKey: 'sourcePath',
-        header: 'Quelle',
-        meta: {
-          label: 'Quelle',
-          cell: {
-            variant: 'short-text',
-          },
-        },
+        header: 'Anmerkung',
+        meta: { label: 'Anmerkung', cell: { variant: 'long-text' } },
       },
     ],
     []

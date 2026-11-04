@@ -2,14 +2,14 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import AutoRefresh from './components/AutoRefresh'
-import { FeedbackWidget } from './components/FeedbackWidget'
 import { OfflineBlocker } from './components/OfflineBlocker'
 import { ThemeProvider } from './components/ThemeProvider'
 import ServiceWorkerRegister from './components/ServiceWorkerRegister'
+import { SiteHeader } from './components/SiteHeader'
+import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
-// const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 
 export const metadata: Metadata = {
   title: "Fitness Studio Auslastung",
@@ -22,19 +22,23 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de" suppressHydrationWarning>
+    <html lang="de" className={inter.variable} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#0ea5a4" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9fafb" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#12151d" />
       </head>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-          <OfflineBlocker>
-            <ServiceWorkerRegister />
-            <AutoRefresh />
-            <FeedbackWidget />
-            {children}
-          </OfflineBlocker>
+      <body>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <TooltipProvider>
+            <SiteHeader />
+            <OfflineBlocker>
+              <ServiceWorkerRegister />
+              <AutoRefresh />
+              {children}
+              <Toaster position="bottom-center" />
+            </OfflineBlocker>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>

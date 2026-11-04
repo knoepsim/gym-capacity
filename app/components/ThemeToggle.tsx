@@ -1,39 +1,47 @@
 "use client"
 
-import { useEffect, useState } from 'react'
-import { MoonStar, SunMedium } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Monitor, Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')
-  }
-
-  if (!mounted) {
-    return null
-  }
-
-  const isDark = resolvedTheme === 'dark'
+  const { theme, setTheme } = useTheme()
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      className="h-10 w-10 rounded-full"
-      onClick={toggleTheme}
-      aria-label={isDark ? 'Heller Modus' : 'Dunkler Modus'}
-      title={isDark ? 'Heller Modus' : 'Dunkler Modus'}
-    >
-      {isDark ? <SunMedium className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Farbschema wählen">
+          {/* Icon follows the resolved theme via the dark variant, so it renders without a hydration flash */}
+          <Sun className="dark:hidden" />
+          <Moon className="hidden dark:block" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuRadioGroup value={theme ?? 'system'} onValueChange={setTheme}>
+            <DropdownMenuRadioItem value="light">
+              <Sun />
+              Hell
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">
+              <Moon />
+              Dunkel
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system">
+              <Monitor />
+              System
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

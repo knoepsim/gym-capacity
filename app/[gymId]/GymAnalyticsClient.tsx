@@ -2,12 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { GymChart } from "@/app/components/GymChart";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
+import {
+  OCCUPANCY_LEVEL_BADGE,
+  OCCUPANCY_LEVEL_LABEL,
+  OCCUPANCY_LEVEL_RANGE,
+  OCCUPANCY_LEVEL_SURFACE,
+  occupancyLevel,
+  type OccupancyLevel,
+} from "@/app/lib/occupancyLevel";
 
-type RangeKey = "30D" | "1Y" | "ALL";
-
-interface ChartDataPoint {
+interface ProfilePoint {
   weekday: number;
   hour: number;
   median_count: number;
@@ -15,112 +24,90 @@ interface ChartDataPoint {
 }
 
 interface GymAnalyticsClientProps {
-  dataByRange: Record<RangeKey, ChartDataPoint[]>;
+  /** Typical value per weekday and hour over the last 30 days. */
+  profile: ProfilePoint[];
   currentWeekday: number;
   maxCapacity: number;
+  unit?: 'persons' | 'percent';
 }
 
-const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const WEEKDAY_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const WEEKDAY_NAMES = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const LEVELS: OccupancyLevel[] = ["low", "moderate", "high"];
 
-export function GymAnalyticsClient({ dataByRange, currentWeekday, maxCapacity }: GymAnalyticsClientProps) {
-  const [selectedRange, setSelectedRange] = useState<RangeKey>("30D");
+// Weekly planner: pick a weekday, see each hour coloured by how busy it usually is.
+export function GymAnalyticsClient({ profile, currentWeekday, maxCapacity, unit = 'persons' }: GymAnalyticsClientProps) {
+  const [selectedDay, setSelectedDay] = useState<number>(currentWeekday);
 
-  const chartData = dataByRange[selectedRange] ?? [];
-
-  const weekdayOrder = useMemo(
-    () => Array.from({ length: 7 }, (_, offset) => (currentWeekday + offset) % 7),
-    [currentWeekday]
+  const fullDay = useMemo(
+    () => profile.filter((point) => point.weekday === selectedDay).sort((a, b) => a.hour - b.hour),
+    [profile, selectedDay]
   );
-
-  const dataByWeekday = useMemo(() => {
-    const grouped: Record<number, Array<{ hour: number; median_count: number; max_capacity: number }>> = {
-      0: [],
-      1: [],
-      2: [],
-      3: [],
-      4: [],
-      5: [],
-      6: [],
-    };
-
-    chartData.forEach((item) => {
-      grouped[item.weekday].push({
-        hour: item.hour,
-        median_count: item.median_count,
-        max_capacity: item.max_capacity,
-      });
-    });
-
-    Object.values(grouped).forEach((dayArray) => {
-      dayArray.sort((a, b) => a.hour - b.hour);
-    });
-
-    return grouped;
-  }, [chartData]);
+  // Closed hours (typical value 0) carry no planning information in the hour grid
+  const dayData = useMemo(() => fullDay.filter((point) => point.median_count > 0), [fullDay]);
 
   return (
-    <Tabs value={selectedRange} onValueChange={(v) => setSelectedRange(v as RangeKey)}>
-      <Card className="mb-12 border-border/70 bg-card/90">
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Auslastungsmuster</CardTitle>
-          <TabsList>
-            <TabsTrigger value="30D">30D</TabsTrigger>
-            <TabsTrigger value="1Y">1Y</TabsTrigger>
-            <TabsTrigger value="ALL">Alltime</TabsTrigger>
-          </TabsList>
-        </CardHeader>
-        <CardContent>
-          <GymChart data={chartData} weekdayOrder={weekdayOrder} maxCapacity={maxCapacity} />
-        </CardContent>
-      </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle>Typische Woche</CardTitle>
+      </CardHeader>
 
-      <Card className="border-border/70 bg-card/90">
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle>Stündliche Auslastung nach Wochentag</CardTitle>
-          <TabsList>
-            <TabsTrigger value="30D">30D</TabsTrigger>
-            <TabsTrigger value="1Y">1Y</TabsTrigger>
-            <TabsTrigger value="ALL">Alltime</TabsTrigger>
-          </TabsList>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-8">
-            {weekdayOrder.map((dayIndex) => (
-              <div key={dayIndex} className="border-b border-border pb-8 last:border-0">
-                <h3 className="mb-4 text-lg font-semibold">
-                  {WEEKDAY_NAMES[dayIndex]} ({WEEKDAYS[dayIndex]})
-                </h3>
+      <CardContent className="flex flex-col gap-4">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={String(selectedDay)}
+          onValueChange={(value) => value && setSelectedDay(Number(value))}
+          aria-label="Wochentag"
+          className="flex-wrap"
+        >
+          {WEEK_ORDER.map((day) => (
+            <ToggleGroupItem key={day} value={String(day)} aria-label={WEEKDAY_NAMES[day]} className="w-11">
+              {WEEKDAY_SHORT[day]}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
 
-                {dataByWeekday[dayIndex].length === 0 ? (
-                  <p className="text-muted-foreground">Keine Daten verfugbar</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                    {Array.from({ length: 24 }).map((_, hour) => {
-                      const data = dataByWeekday[dayIndex].find((d) => d.hour === hour);
-                      if (!data) return null;
+        {dayData.length === 0 ? (
+          <Empty className="p-4">
+            <EmptyHeader>
+              <EmptyTitle>Keine Daten für {WEEKDAY_NAMES[selectedDay]}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
+          <GymChart data={fullDay} unit={unit} />
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-9">
+            {dayData.map((data) => {
+              const percent = maxCapacity > 0 ? (data.median_count / maxCapacity) * 100 : 0;
+              const level = occupancyLevel(percent);
 
-                      const percent = maxCapacity > 0 ? (data.median_count / maxCapacity) * 100 : 0;
-
-                      let colorClass = "bg-emerald-100 text-emerald-950";
-                      if (percent >= 80) colorClass = "bg-red-100 text-red-950";
-                      else if (percent >= 50) colorClass = "bg-amber-100 text-amber-950";
-
-                      return (
-                        <div key={hour} className={`rounded-lg p-3 text-center transition-colors ${colorClass}`}>
-                          <p className="text-sm font-semibold">{hour}:00</p>
-                          <p className="text-lg font-bold">{Math.round(data.median_count)}</p>
-                          <p className="text-xs opacity-75">{percent.toFixed(0)}%</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+              return (
+                <div
+                  key={data.hour}
+                  className={cn("flex flex-col items-center gap-0.5 rounded-lg p-2 text-center", OCCUPANCY_LEVEL_SURFACE[level])}
+                  title={`${OCCUPANCY_LEVEL_LABEL[level]} (${percent.toFixed(0)} %)`}
+                >
+                  <span className="text-xs text-muted-foreground tabular-nums">{String(data.hour).padStart(2, "0")}:00</span>
+                  <span className="text-sm font-semibold tabular-nums">
+                    {unit === 'percent' ? `${percent.toFixed(0)}%` : Math.round(data.median_count)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-        </CardContent>
-      </Card>
-    </Tabs>
+          </>
+        )}
+      </CardContent>
+
+      <CardFooter className="flex flex-wrap gap-2">
+        {LEVELS.map((level) => (
+          <Badge key={level} variant={OCCUPANCY_LEVEL_BADGE[level]}>
+            {OCCUPANCY_LEVEL_LABEL[level]} · {OCCUPANCY_LEVEL_RANGE[level]}
+          </Badge>
+        ))}
+      </CardFooter>
+    </Card>
   );
 }

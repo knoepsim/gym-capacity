@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { getInferredOpeningForGym, type OpeningHours } from './forecasting'
+import { effectiveWeekday, getBerlinDateKey, getHolidays } from './holidays'
 
 export interface ClosedStatus {
   isLikelyClosed: boolean
@@ -38,19 +39,32 @@ export function isGym24h(opening: OpeningHours | null): boolean {
   return Object.values(opening).some((day) => day?.is24h === true)
 }
 
+// Calendar arithmetic on the local date: "now minus 24 h" is wrong on 23/25 hour days around DST changes.
+function previousDateKey(dateKey: string): string {
+  const noon = new Date(`${dateKey}T12:00:00Z`)
+  noon.setUTCDate(noon.getUTCDate() - 1)
+  return noon.toISOString().slice(0, 10)
+}
+
 export function isOutsideOpeningHours(
   opening: OpeningHours | null,
-  date: Date = new Date()
+  date: Date = new Date(),
+  holidays: Set<string> = new Set()
 ): { isClosed: boolean; stableMinutes: number; reason?: 'schedule' } {
   if (!opening) {
     return { isClosed: false, stableMinutes: 0 }
   }
 
   const { weekday, hour, minute } = getBerlinTimeParts(date)
-  const weekdayIndex = WEEKDAY_NAMES.indexOf(weekday)
+  const weekdayIndex = effectiveWeekday(WEEKDAY_NAMES.indexOf(weekday), getBerlinDateKey(date), holidays)
   const todayOpening = opening[weekdayIndex]
 
-  if (!todayOpening) {
+  if (todayOpening === undefined) {
+    // No reliable schedule for this weekday yet
+    return { isClosed: false, stableMinutes: 0 }
+  }
+
+  if (todayOpening === null) {
     return { isClosed: true, stableMinutes: hour * 60 + minute, reason: 'schedule' }
   }
 
@@ -71,7 +85,11 @@ export function isOutsideOpeningHours(
   if (hour >= closeHour) {
     stableMinutes = (hour - closeHour) * 60 + minute
   } else {
-    const prevWeekdayIndex = (weekdayIndex + 6) % 7
+    const prevWeekdayIndex = effectiveWeekday(
+      (WEEKDAY_NAMES.indexOf(weekday) + 6) % 7,
+      previousDateKey(getBerlinDateKey(date)),
+      holidays
+    )
     const prevOpening = opening[prevWeekdayIndex]
     const prevCloseHour = prevOpening ? (prevOpening.is24h ? 24 : prevOpening.close + 1) : 23
     stableMinutes = (24 - prevCloseHour) * 60 + (hour * 60 + minute)
@@ -88,7 +106,7 @@ export async function detectLikelyClosed(
 ): Promise<ClosedStatus> {
   // 1. Primary check: Purely automated opening hours inferred from historical turnover
   const opening = inferredOpening ?? (await getInferredOpeningForGym(prisma, gymId))
-  const scheduleCheck = isOutsideOpeningHours(opening, referenceDate)
+  const scheduleCheck = isOutsideOpeningHours(opening, referenceDate, await getHolidays())
 
   if (scheduleCheck.isClosed) {
     const latest = await prisma.occupancy.findFirst({

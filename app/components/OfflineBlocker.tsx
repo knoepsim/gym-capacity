@@ -1,81 +1,53 @@
 "use client"
 
 import { ReactNode, useEffect, useState } from 'react'
-import { Loader2, WifiOff } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { WifiOff } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
+// The page always renders; when the server is unreachable a notice explains that the shown values may be
+// outdated (instead of hiding everything behind a full-screen loader on every start).
 export function OfflineBlocker({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking')
+  const [offline, setOffline] = useState(false)
 
   useEffect(() => {
-    const controller = new AbortController()
-    let timer: number | undefined
+    let cancelled = false
 
     const checkConnection = async () => {
-      setStatus('checking')
-
       try {
-        timer = window.setTimeout(() => controller.abort(), 3000)
-        const response = await fetch('/api/status', {
-          cache: 'no-store',
-          signal: controller.signal,
-        })
-
-        setStatus(response.ok ? 'online' : 'offline')
+        const response = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        if (!cancelled) setOffline(!response.ok)
       } catch {
-        setStatus('offline')
-      } finally {
-        if (timer !== undefined) {
-          window.clearTimeout(timer)
-        }
+        if (!cancelled) setOffline(true)
       }
     }
 
-    const onOnline = () => {
-      void checkConnection()
-    }
-
-    const onOffline = () => {
-      setStatus('offline')
-    }
+    const onOnline = () => void checkConnection()
+    const onOffline = () => setOffline(true)
 
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
-
-    void checkConnection()
+    if (navigator.onLine) void checkConnection()
+    else setOffline(true)
 
     return () => {
-      controller.abort()
-      if (timer !== undefined) {
-        window.clearTimeout(timer)
-      }
+      cancelled = true
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
   }, [])
 
-  if (status === 'online') {
-    return <>{children}</>
-  }
-
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/95 px-6 text-center backdrop-blur-sm">
-      <Card className="w-full max-w-md border-border/70 shadow-2xl">
-        <CardHeader className="items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-            {status === 'checking' ? <Loader2 className="h-6 w-6 animate-spin" /> : <WifiOff className="h-6 w-6" />}
-          </div>
-          <CardTitle className="text-2xl tracking-tight">
-            {status === 'checking' ? 'Verbindung wird aufgebaut' : 'Keine Verbindung'}
-          </CardTitle>
-          <CardDescription>
-            {status === 'checking'
-              ? 'Gym Auslastungen werden geladen. Bitte warten...'
-              : 'Die App benötigt Live-Daten. Solange keine Verbindung besteht, wird nichts angezeigt.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-8" />
-      </Card>
-    </div>
+    <>
+      {offline ? (
+        <div className="sticky top-14 z-30 mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+          <Alert>
+            <WifiOff />
+            <AlertTitle>Keine Verbindung</AlertTitle>
+            <AlertDescription>Die angezeigten Werte können veraltet sein. Sobald du wieder online bist, wird aktualisiert.</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      {children}
+    </>
   )
 }

@@ -1,44 +1,119 @@
 [
   {
-    "id": "karlsruhe-sued",
-    "name": "Sportprinz Karlsruhe Süd",
-    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/22",
-    "maxCapacity": 160,
-    "description": "Unser großes Studio im Süden Karlsruhes"
-  },
-  {
-    "id": "freiburg-west",
-    "name": "Sportprinz Freiburg West",
-    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/16",
-    "maxCapacity": 160,
-    "description": "Modernes Fitness Studio in Freiburg"
-  },
-  {
-    "id": "hugstetten-sportpark",
+    "id": "sportpark-hugstetten",
     "name": "Sportpark Hugstetten",
     "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/1",
+    "region": "BW",
+    "city": "Hugstetten",
     "maxCapacity": 160,
-    "description": "Sportpark Fitnessclub in Hugstetten"
+    "description": "Sportpark Fitnessclub in Hugstetten",
+    "previousIds": [
+      "hugstetten-sportpark"
+    ]
   },
   {
-    "id": "freiburg-west-sportpark",
-    "name": "Sportpark Freiburg West",
+    "id": "sportpark-freiburg",
+    "name": "Sportpark Freiburg",
     "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/2",
+    "region": "BW",
+    "city": "Freiburg",
     "maxCapacity": 350,
-    "description": "Sportpark Fitnessclub in Freiburg"
+    "description": "Sportpark Fitnessclub in Freiburg",
+    "previousIds": [
+      "freiburg-west-sportpark"
+    ]
   },
   {
-    "id": "freiburg-sued-sportprinz",
-    "name": "Sportprinz Freiburg Süd",
-    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/26",
+    "id": "sportpark-kippenheim",
+    "name": "Sportpark Kippenheim",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/3",
+    "region": "BW",
+    "city": "Kippenheim",
     "maxCapacity": 160,
-    "description": "Fitnessstudio in Freiburg Süd"
+    "description": "Fitnessstudio in Kippenheim"
   },
   {
-    "id": "karlsruhe-west-sportprinz",
+    "id": "sportpark-lahr",
+    "name": "Sportpark Lahr",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/9",
+    "region": "BW",
+    "city": "Lahr",
+    "maxCapacity": 200,
+    "description": "Fitnessstudio in Lahr"
+  },
+  {
+    "id": "sportprinz-freiburg-west",
+    "name": "Sportprinz Freiburg West",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/16",
+    "region": "BW",
+    "city": "Freiburg",
+    "maxCapacity": 160,
+    "description": "Modernes Fitness Studio in Freiburg",
+    "previousIds": [
+      "freiburg-west"
+    ]
+  },
+  {
+    "id": "sportprinz-rastatt",
+    "name": "Sportprinz Rastatt",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/21",
+    "region": "BW",
+    "city": "Rastatt",
+    "maxCapacity": 80,
+    "description": "Fitnessstudio in Rastatt"
+  },
+  {
+    "id": "sportprinz-karlsruhe-sued",
+    "name": "Sportprinz Karlsruhe Süd",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/22",
+    "region": "BW",
+    "city": "Karlsruhe",
+    "maxCapacity": 160,
+    "description": "Unser großes Studio im Süden Karlsruhes",
+    "previousIds": [
+      "karlsruhe-sued"
+    ]
+  },
+  {
+    "id": "sportprinz-karlsruhe-west",
     "name": "Sportprinz Karlsruhe West",
     "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/23",
+    "region": "BW",
+    "city": "Karlsruhe",
     "maxCapacity": 160,
-    "description": "Fitnessstudio in Karlsruhe West"
+    "description": "Fitnessstudio in Karlsruhe West",
+    "previousIds": [
+      "karlsruhe-west-sportprinz"
+    ]
+  },
+  {
+    "id": "sportprinz-gaggenau",
+    "name": "Sportprinz Gaggenau",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/25",
+    "region": "BW",
+    "city": "Gaggenau",
+    "maxCapacity": 80,
+    "description": "Fitnessstudio in Gaggenau"
+  },
+  {
+    "id": "sportprinz-freiburg-sued",
+    "name": "Sportprinz Freiburg Süd",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/26",
+    "region": "BW",
+    "city": "Freiburg",
+    "maxCapacity": 160,
+    "description": "Fitnessstudio in Freiburg Süd",
+    "previousIds": [
+      "freiburg-sued-sportprinz"
+    ]
+  },
+  {
+    "id": "sportprinz-bad-krotzingen",
+    "name": "Sportprinz Bad Krotzingen",
+    "url": "https://clubconnector.sovd.cloud/api/anwesende/47fc873e-1bc1-431a-9111-e66d5abefa67-070367/30",
+    "region": "BW",
+    "city": "Bad Krotzingen",
+    "maxCapacity": 80,
+    "description": "Fitnessstudio in Bad Krotzingen"
   }
 ]

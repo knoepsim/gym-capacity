@@ -3,5 +3,9 @@ FROM alpine:latest
 
 RUN apk add --no-cache curl
 
-# Starte einen einfachen Loop der die API alle 5 Minuten aufruft
-CMD ["sh", "-c", "while true; do echo \"[$(date)] Calling fetch API...\"; if [ -n \"$FETCH_API_KEY\" ]; then curl -X POST http://web:3000/api/fetch -H 'Content-Type: application/json' -H \"x-api-key: $FETCH_API_KEY\" || echo 'Fetch fehlgeschlagen'; else curl -X POST http://web:3000/api/fetch -H 'Content-Type: application/json' || echo 'Fetch fehlgeschlagen'; fi; sleep 300; done"]
+# Ruft die API an festen Intervallgrenzen auf (Standard alle 5 Minuten = baseIntervalMinutes in
+# config/polling.json). Welche Studios jeweils fällig sind, entscheidet die API selbst.
+# FETCH_URL zeigt auf den Container-Namen der Web-App (container_name in docker-compose.yml).
+ENV FETCH_INTERVAL_SECONDS=300
+ENV FETCH_URL=http://gym_web:3000/api/fetch
+CMD ["sh", "-c", "echo \"Cron gestartet: $FETCH_URL alle $FETCH_INTERVAL_SECONDS s\"; while true; do sleep $((FETCH_INTERVAL_SECONDS - $(date +%s) % FETCH_INTERVAL_SECONDS)); echo \"[$(date)] Calling $FETCH_URL\"; if [ -n \"$FETCH_API_KEY\" ]; then curl -sS --max-time 280 -X POST \"$FETCH_URL\" -H 'Content-Type: application/json' -H \"x-api-key: $FETCH_API_KEY\" || echo 'Fetch fehlgeschlagen'; else curl -sS --max-time 280 -X POST \"$FETCH_URL\" -H 'Content-Type: application/json' || echo 'Fetch fehlgeschlagen'; fi; echo; done"]

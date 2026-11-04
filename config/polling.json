@@ -1,0 +1,9 @@
+{
+  "baseIntervalMinutes": 5,
+  "defaultIntervalMinutes": 15,
+  "regionIntervalMinutes": {
+    "BW": 5
+  },
+  "requestDelayMs": 300,
+  "maxRequestsPerRun": 70
+}

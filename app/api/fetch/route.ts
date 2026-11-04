@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import gyms from '@/config/gyms.json'
 import { prisma } from '@/lib/prisma'
 import { upsertGymSnapshot } from '@/app/lib/gymSnapshot'
+import { fetchReading, syncConfigGyms, syncFitxStudios } from '@/app/lib/providers'
+import { BASE_INTERVAL_MINUTES, REQUEST_DELAY_MS, intervalMinutesFor, selectDueGyms } from '@/app/lib/polling'
+
+// Snapshots of gyms that were not fetched (failing source, hidden workload) are still refreshed after this
+// many intervals, so "today" never keeps showing yesterday's curve. Bounded per run.
+const STALE_SNAPSHOT_INTERVALS = 2
+const MAX_STALE_REFRESH_PER_RUN = 20
 
 /**
  * POST /api/fetch
- * Externe Services oder Cron-Jobs können diese Route aufrufen
- * um aktuelle Auslastungsdaten abzurufen
+ * Wird vom Cron-Service alle BASE_INTERVAL_MINUTES aufgerufen. Abgerufen werden nur die Studios, die laut
+ * config/polling.json gerade fällig sind; längere Intervalle werden über mehrere Läufe verteilt.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,50 +29,56 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    await syncConfigGyms(prisma)
+    await syncFitxStudios(prisma)
+
+    const [gyms, lastRows] = await Promise.all([
+      prisma.gym.findMany({ where: { active: true }, orderBy: { id: 'asc' } }),
+      // One index lookup per gym instead of aggregating the whole table
+      prisma.$queryRaw<{ gymId: string; max_ts: Date | null }[]>`
+        SELECT g."id" AS "gymId",
+          (SELECT MAX(o."timestamp") FROM "Occupancy" o WHERE o."gymId" = g."id") AS max_ts
+        FROM "Gym" g
+        WHERE g."active" = true
+      `,
+    ])
+    const lastByGym = new Map(
+      lastRows.filter((row) => row.max_ts !== null).map((row) => [row.gymId, new Date(row.max_ts as Date)])
+    )
+    const now = Date.now()
+    const dueGyms = selectDueGyms(gyms, lastByGym, now)
+
     let successCount = 0
     let errorCount = 0
+    let skippedCount = 0
+    const fetchedIds: string[] = []
 
-    // Für jedes Studio: Daten abrufen und speichern
-    for (const gym of gyms) {
+    for (const [index, gym] of dueGyms.entries()) {
+      if (index > 0 && REQUEST_DELAY_MS > 0) {
+        await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS))
+      }
+
       try {
-        const response = await fetch(gym.url, {
-          method: 'GET',
-          headers: { 'User-Agent': 'GymCapacityMonitor/1.0' }
-        })
+        const reading = await fetchReading(gym)
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
+        if (!reading) {
+          skippedCount++
+          continue
         }
 
-        const data = await response.json()
-
-        // Validiere die Antwort
-        if (typeof data.count !== 'number' || typeof data.maxCount !== 'number') {
-          throw new Error(`Invalid data format: ${JSON.stringify(data)}`)
-        }
-
-        // Stelle sicher, dass das Studio in der DB existiert
-        await prisma.gym.upsert({
-          where: { id: gym.id },
-          update: {},
-          create: { id: gym.id, name: gym.name, url: gym.url }
-        })
-
-        // Speichere die Auslastungsdaten
+        // Speichere die Auslastungsdaten unverändert (roh)
         await prisma.occupancy.create({
           data: {
             gymId: gym.id,
-            count: data.count,
-            maxCount: data.maxCount,
-            timestamp: new Date()
-          }
+            count: reading.count,
+            maxCount: reading.maxCount,
+            timestamp: new Date(),
+          },
         })
 
-        // Cache the derived snapshot once per fetch cycle so page requests only read cached data.
-        await upsertGymSnapshot(prisma, gym.id)
-
-        const occupancyPercent = Math.round((data.count / data.maxCount) * 100)
-        console.log(`✓ ${gym.name}: ${data.count}/${data.maxCount} (${occupancyPercent}%)`)
+        fetchedIds.push(gym.id)
+        const occupancyPercent = reading.maxCount > 0 ? Math.round((reading.count / reading.maxCount) * 100) : 0
+        console.log(`✓ ${gym.name}: ${reading.count}/${reading.maxCount} (${occupancyPercent}%)`)
         successCount++
       } catch (error) {
         console.error(`✗ Fehler bei ${gym.name}:`, error)
@@ -74,16 +86,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Refresh snapshots that are too old although the gym was not fetched (e.g. its source is failing).
+    const caches = await prisma.gymAnalyticsCache.findMany({ select: { gymId: true, computedAt: true } })
+    const computedAtByGym = new Map(caches.map((cache) => [cache.gymId, cache.computedAt.getTime()]))
+    const fetchedSet = new Set(fetchedIds)
+    const staleIds = gyms
+      .filter((gym) => !fetchedSet.has(gym.id) && lastByGym.has(gym.id))
+      .filter((gym) => {
+        const computedAt = computedAtByGym.get(gym.id)
+        return computedAt === undefined || now - computedAt > intervalMinutesFor(gym.region) * STALE_SNAPSHOT_INTERVALS * 60000
+      })
+      .slice(0, MAX_STALE_REFRESH_PER_RUN)
+      .map((gym) => gym.id)
+
+    // Cache the derived snapshots so page requests only read cached data.
+    for (const gymId of [...fetchedIds, ...staleIds]) {
+      try {
+        await upsertGymSnapshot(prisma, gymId)
+      } catch (error) {
+        console.error(`✗ Snapshot für ${gymId} fehlgeschlagen:`, error)
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
-        message: `Datenabruf abgeschlossen: ${successCount} erfolgreich, ${errorCount} Fehler`,
+        message: `Datenabruf abgeschlossen: ${successCount} erfolgreich, ${errorCount} Fehler, ${skippedCount} ohne Wert`,
         timestamp: new Date(),
         stats: {
           success: successCount,
           failed: errorCount,
-          total: gyms.length
-        }
+          skipped: skippedCount,
+          due: dueGyms.length,
+          staleSnapshotsRefreshed: staleIds.length,
+          total: gyms.length,
+        },
       },
       { status: 200 }
     )
@@ -105,13 +142,20 @@ export async function POST(request: NextRequest) {
  * Health check / Info endpoint
  */
 export async function GET() {
+  const gyms = await prisma.gym.findMany({
+    where: { active: true },
+    select: { id: true, name: true, provider: true, region: true },
+    orderBy: { id: 'asc' },
+  })
+
   return NextResponse.json({
     message: 'Gym Capacity Fetcher API',
     endpoint: 'POST /api/fetch',
-      auth: process.env.FETCH_API_KEY ? 'Required: x-api-key Header' : 'Optional: x-api-key Header',
+    auth: process.env.FETCH_API_KEY ? 'Required: x-api-key Header' : 'Optional: x-api-key Header',
+    baseIntervalMinutes: BASE_INTERVAL_MINUTES,
     stats: {
       gyms: gyms.length,
-      gyms_list: gyms.map(g => ({ id: g.id, name: g.name }))
+      gyms_list: gyms,
     },
     timestamp: new Date()
   })

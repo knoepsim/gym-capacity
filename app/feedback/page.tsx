@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { impressionLabel } from '@/app/lib/feedbackScale'
 import { FeedbackGymGrid } from './FeedbackGymGrid'
 
 async function getFeedbackEntries() {
@@ -26,10 +27,6 @@ async function getFeedbackEntries() {
     console.error('Fehler beim Abrufen des Feedbacks:', error)
     return []
   }
-}
-
-function formatRating(value: number | null) {
-  return value ?? '—'
 }
 
 function formatTimestamp(value: Date) {
@@ -59,7 +56,7 @@ export default async function FeedbackPage() {
     <main className="min-h-screen">
       <div className="border-b border-border/70 bg-card/70 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:px-8">
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Feedback-Übersicht</h1>
             <p className="max-w-2xl text-muted-foreground">
               Alle eingegangenen Rückmeldungen, gruppiert pro Studio.
@@ -84,7 +81,7 @@ export default async function FeedbackPage() {
             </CardHeader>
           </Card>
         ) : (
-          <div className="space-y-8">
+          <div className="flex flex-col gap-8">
             {gymIds.map((gymId) => {
               const gymEntries = grouped[gymId] ?? []
               const gymName = gymEntries[0]?.gym.name ?? gymId
@@ -102,12 +99,10 @@ export default async function FeedbackPage() {
                       entries={gymEntries.map((entry) => ({
                         id: entry.id,
                         createdAtLabel: formatTimestamp(entry.createdAt),
-                        waitTimeRating: entry.waitTimeRating,
-                        densityRating: entry.densityRating,
-                        wouldGoRating: entry.wouldGoRating,
+                        impression: impressionLabel(entry.densityRating),
+                        estimatedCount: entry.estimatedCount,
                         occupancyCount: entry.occupancyCount,
                         comment: entry.comment,
-                        sourcePath: entry.sourcePath,
                       }))}
                     />
                   </CardContent>

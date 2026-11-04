@@ -11,3 +11,6 @@ dist
 .prisma
 test/
 __pycache__/
+
+# Local compose overrides
+docker-compose.override.yml

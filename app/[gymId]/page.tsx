@@ -1,30 +1,37 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { Activity, ArrowLeft, TriangleAlert } from 'lucide-react'
 import { GymAnalyticsClient } from './GymAnalyticsClient'
 import gyms from '@/config/gyms.json'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DailyTrendChart } from '@/app/components/DailyTrendChart'
-import { ThemeToggle } from '../components/ThemeToggle'
-import { prisma } from '@/lib/prisma'
+import { FeedbackWidget } from '@/app/components/FeedbackWidget'
+import { RecentGymTracker } from '@/app/components/RecentGymTracker'
 import { getCachedGymSnapshot } from '@/app/lib/gymSnapshot'
 import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
+  MIN_HISTORY_DAYS_FOR_RECOMMENDATION,
+  berlinHour,
+  computeDeviation,
+  computeTrend,
+  describeDeviation,
+  findBestTime,
+  formatHourWindow,
+} from '@/app/lib/insights'
+import { OCCUPANCY_LEVEL_BADGE, OCCUPANCY_LEVEL_LABEL, occupancyLevel } from '@/app/lib/occupancyLevel'
+import { isStale } from '@/app/lib/staleness'
+import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 
 const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as Record<
   string,
   (typeof gyms)[number]
 >
 
-type RangeKey = '30D' | '1Y' | 'ALL'
+const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
 
 interface PageProps {
   params: Promise<{
@@ -43,6 +50,10 @@ async function getGymInfo(gymId: string) {
   }
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' })
+}
+
 export default async function GymDetailPage({ params }: PageProps) {
   const { gymId } = await params
 
@@ -52,196 +63,129 @@ export default async function GymDetailPage({ params }: PageProps) {
   }
 
   const gymInfo = await getGymInfo(gymId)
-
   if (!gymInfo) {
-    return (
-      <main className="min-h-screen">
-        <div className="mx-auto max-w-3xl px-4 py-24 sm:px-6 lg:px-8">
-          <Card className="border-border/70 bg-card/90 text-center">
-            <CardHeader>
-              <CardTitle className="text-3xl">Studio nicht gefunden</CardTitle>
-              <CardDescription>
-              Für die Gym-ID "{gymId}" gibt es kein Studio. Bitte prüfe den Link oder gehe zurück zur Übersicht.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link href="/">Zur Startseite</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
-    )
+    notFound()
   }
 
   const snapshot = await getCachedGymSnapshot(prisma, gymId)
+  const { aggregated30d, dailySeries: todaySeries, latest, closedStatus } = snapshot
 
-  const { aggregated30d: data30d, aggregated1y: data1y, aggregatedAll: dataAll, dailySeries: todaySeries, latest: latestOccupancy, closedStatus, trendDir: trend } = snapshot
-
-  const chartData = data30d
-
-  const gymName = gymInfo?.name || 'Unbekanntes Studio'
-  const gymMaxCapacity = GYM_CONFIG_BY_ID[gymId]?.maxCapacity ?? latestOccupancy?.maxCount ?? 160
+  const unit = gymInfo.unit === 'percent' ? 'percent' : 'persons'
+  const maxCapacity = GYM_CONFIG_BY_ID[gymId]?.maxCapacity ?? latest?.maxCount ?? (unit === 'percent' ? 100 : 160)
   const isLikelyClosed = closedStatus.isLikelyClosed
-  const displayCount = isLikelyClosed ? 0 : (latestOccupancy?.count ?? 0)
-  const utilization = Math.round((displayCount / gymMaxCapacity) * 100)
+  const displayCount = isLikelyClosed ? 0 : (latest?.count ?? 0)
+  const utilization = Math.round((displayCount / maxCapacity) * 100)
+  const level = occupancyLevel(utilization)
+  const location = [gymInfo.city, gymInfo.region].filter(Boolean).join(', ')
+  const stale = isStale(latest?.timestamp ?? null, gymInfo.region)
 
-  const berlinWeekday = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    timeZone: 'Europe/Berlin',
-  }).format(new Date())
+  const hour = berlinHour()
+  const forecastReady = (snapshot.historyDays ?? 0) >= MIN_HISTORY_DAYS_FOR_RECOMMENDATION
+  const live = latest !== null && !isLikelyClosed && !stale
+  const trend = live ? computeTrend(todaySeries, displayCount, maxCapacity, hour) : null
+  const deviation = live && forecastReady ? computeDeviation(todaySeries, displayCount, maxCapacity, hour) : null
+  const bestTime = !isLikelyClosed && forecastReady ? findBestTime(todaySeries, hour) : null
+  const amount = (value: number) => (unit === 'percent' ? `${value} %` : `${value} Personen`)
+  const change = (value: number) => (unit === 'percent' ? `${value} Pkt.` : `${value} Personen`)
 
-  const weekdayMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  }
-  const currentWeekday = weekdayMap[berlinWeekday] ?? 0
+  const currentWeekday =
+    WEEKDAY_INDEX[new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Europe/Berlin' }).format(new Date())] ?? 0
 
   return (
-    <main className="min-h-screen">
-      <div className="border-b border-border/70 bg-card/70 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <Breadcrumb className="mb-4">
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild>
-                  <Link href="/">Übersicht</Link>
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{gymName}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{gymName}</h1>
-              <p className="text-muted-foreground">Detaillierte Auslastungsanalyse - wöchentlich und stündlich.</p>
-            </div>
-            <ThemeToggle />
-          </div>
+    <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 pb-24 sm:px-6 lg:px-8">
+      <RecentGymTracker gymId={gymId} />
+      <FeedbackWidget gymId={gymId} gymName={gymInfo.name} />
+
+      <div className="flex flex-col gap-2">
+        <Button asChild variant="ghost" size="sm" className="self-start">
+          <Link href="/">
+            <ArrowLeft data-icon="inline-start" />
+            Übersicht
+          </Link>
+        </Button>
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{gymInfo.name}</h1>
+          {location ? <p className="text-muted-foreground">{location}</p> : null}
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        {latestOccupancy && (
-          <Card className="mb-12 border-border/70 bg-card/90">
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <CardTitle>Aktuelle Auslastung</CardTitle>
-                {isLikelyClosed ? (
-                  <Badge className="rounded-md bg-amber-500 text-white hover:bg-amber-500">Geschlossen erkannt</Badge>
-                ) : (
-                  <Badge variant="secondary" className="rounded-md">Offen</Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
-                    <div>
-                      <p className="text-sm font-semibold text-muted-foreground">PERSONEN</p>
-                      <p className="mt-2 text-4xl font-bold">{displayCount}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-muted-foreground">AUSLASTUNG</p>
-                      <p className="mt-2 text-4xl font-bold">{utilization}%</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-muted-foreground">TREND</p>
-                      <p className="mt-2 text-lg font-bold">
-                        {trend === 'up' ? 'Zunehmend' : trend === 'down' ? 'Abnehmend' : 'Gleichbleibend'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-muted-foreground">AKTUALISIERT</p>
-                      <p className="mt-2 text-lg">
-                        {latestOccupancy ? new Date(latestOccupancy.timestamp).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) : '—'}
-                      </p>
-                    </div>
-                  </div>
-                  <Progress value={utilization} />
-            </CardContent>
-          </Card>
-        )}
+      {stale && latest ? (
+        <Alert>
+          <TriangleAlert />
+          <AlertTitle>Daten veraltet</AlertTitle>
+          <AlertDescription>Letzter Messwert von {formatTime(latest.timestamp)} Uhr. Die Quelle liefert gerade nichts Neues.</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <Card className="mb-12 border-border/70 bg-card/90">
+      {latest && (
+        <Card>
           <CardHeader>
-            <CardTitle>Heutiger Verlauf</CardTitle>
-            <CardDescription>Aktuelle Statistik für heute mit gestrichelter Prognose für kommende Stunden.</CardDescription>
+            <CardTitle>Jetzt</CardTitle>
+            <CardDescription>Stand {formatTime(latest.timestamp)} Uhr</CardDescription>
+            <CardAction>
+              {isLikelyClosed ? (
+                <Badge variant="secondary">Geschlossen</Badge>
+              ) : (
+                <Badge variant={OCCUPANCY_LEVEL_BADGE[level]}>{OCCUPANCY_LEVEL_LABEL[level]}</Badge>
+              )}
+            </CardAction>
           </CardHeader>
-          <CardContent>
-            <DailyTrendChart data={todaySeries} height={260} />
-            <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <span className="h-[2px] w-5 bg-primary" />
-                Heute
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="h-[2px] w-5 border-t-2 border-dashed border-amber-500" />
-                Prognose
-              </span>
-            </div>
+          <CardContent className="flex flex-col gap-5">
+            <dl className="grid grid-cols-2 gap-6 md:grid-cols-3">
+              <div className="flex flex-col gap-1">
+                <dt className="text-sm text-muted-foreground">{unit === 'persons' ? 'Personen' : 'Auslastung'}</dt>
+                <dd className="text-2xl font-semibold sm:text-3xl tabular-nums">{unit === 'persons' ? displayCount : `${utilization}%`}</dd>
+                {unit === 'persons' ? (
+                  <dd className="text-xs text-muted-foreground tabular-nums">
+                    {utilization} % ausgelastet
+                    {!isLikelyClosed && latest.rawCount !== undefined && latest.rawCount !== displayCount
+                      ? ` · geschätzt, Zähler zeigt ${latest.rawCount}`
+                      : ''}
+                  </dd>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-1">
+                <dt className="text-sm text-muted-foreground">Nächste 2 Stunden</dt>
+                <dd className="text-2xl font-semibold sm:text-3xl">
+                  {!trend ? '—' : trend.direction === 'up' ? 'Steigend' : trend.direction === 'down' ? 'Sinkend' : 'Gleich'}
+                </dd>
+                {trend && trend.direction !== 'equal' ? (
+                  <dd className="text-xs text-muted-foreground tabular-nums">
+                    {trend.change > 0 ? '+' : '−'}
+                    {change(Math.abs(trend.change))}
+                  </dd>
+                ) : null}
+              </div>
+              <div className="flex flex-col gap-1">
+                <dt className="text-sm text-muted-foreground">Beste Zeit heute</dt>
+                <dd className="text-2xl font-semibold sm:text-3xl tabular-nums">{bestTime ? formatHourWindow(bestTime) : '—'}</dd>
+                <dd className="text-xs text-muted-foreground tabular-nums">
+                  {bestTime ? `ca. ${amount(bestTime.forecast)}` : !forecastReady ? 'ab einer Woche Daten' : 'heute nicht mehr'}
+                </dd>
+              </div>
+            </dl>
+            {deviation ? (
+              <p className="flex items-start gap-2 text-sm">
+                <Activity className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <span className={deviation.level !== 'usual' ? 'font-medium' : undefined}>
+                  {describeDeviation(deviation, unit, snapshot.typicalWeekday ?? null)}
+                </span>
+              </p>
+            ) : null}
           </CardContent>
         </Card>
+      )}
 
-        <GymAnalyticsClient
-          currentWeekday={currentWeekday}
-          maxCapacity={gymMaxCapacity}
-          dataByRange={{
-            '30D': data30d,
-            '1Y': data1y,
-            ALL: dataAll,
-          }}
-        />
+      <Card>
+        <CardHeader>
+          <CardTitle>Heute</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DailyTrendChart data={todaySeries} height={260} showTypical={forecastReady} />
+        </CardContent>
+      </Card>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <Card className="border-emerald-300/70 bg-emerald-50">
-            <CardHeader>
-              <CardTitle className="text-lg dark:text-emerald-950">Gering ausgelastet</CardTitle>
-              <CardDescription className="dark:text-emerald-900/80">Slots mit &lt;50% Auslastung</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-emerald-900 dark:text-emerald-950">
-              {chartData.filter((d) => (d.median_count / gymMaxCapacity) * 100 < 50).length}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-amber-300/70 bg-amber-50">
-            <CardHeader>
-              <CardTitle className="text-lg dark:text-amber-950">Moderat ausgelastet</CardTitle>
-              <CardDescription className="dark:text-amber-900/80">Slots mit 50-80% Auslastung</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-amber-900 dark:text-amber-950">
-              {chartData.filter((d) => {
-                const p = (d.median_count / gymMaxCapacity) * 100
-                return p >= 50 && p < 80
-              }).length}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-red-300/70 bg-red-50">
-            <CardHeader>
-              <CardTitle className="text-lg dark:text-red-950">Stark ausgelastet</CardTitle>
-              <CardDescription className="dark:text-red-900/80">Slots mit &gt;80% Auslastung</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-red-900 dark:text-red-950">
-              {chartData.filter((d) => (d.median_count / gymMaxCapacity) * 100 >= 80).length}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <GymAnalyticsClient profile={aggregated30d} currentWeekday={currentWeekday} maxCapacity={maxCapacity} unit={unit} />
     </main>
   )
 }

@@ -51,6 +51,7 @@ services:
     container_name: gym_cron
     environment:
       FETCH_API_KEY: ${FETCH_API_KEY:-}
+      FETCH_URL: ${FETCH_URL:-http://gym_web:3000/api/fetch}
     depends_on:
       - web
     networks:

@@ -1,5 +1,8 @@
-import { PrismaClient } from '@prisma/client'
-import { type DailyTrendPoint } from '@/app/components/DailyTrendChart'
+import type { PrismaClient } from '@prisma/client'
+import type { DailyTrendPoint } from '@/app/components/DailyTrendChart'
+import { correctGhosts } from './ghostCorrection'
+import { effectiveWeekday, getHolidays } from './holidays'
+import type { HourlyRow } from './hourlyRollup'
 
 export interface StableAggregatedPoint {
   weekday: number
@@ -8,11 +11,13 @@ export interface StableAggregatedPoint {
   max_capacity: number
 }
 
-interface OccupancyHistoryRow {
+export interface OccupancyHistoryRow {
   local_day: string
   weekday: bigint
   hour: bigint
-  count: number
+  timestamp: Date
+  count: number // ghost-corrected occupancy
+  raw_count?: number // counter value as reported upstream
   max_count: number
 }
 
@@ -20,11 +25,18 @@ interface DayBucket {
   weekday: number
   maxCapacity: number
   hourlyValues: Map<number, number[]>
+  // Raw counter values: turnover (value changes) must be measured on the counter itself.
+  rawHourlyValues: Map<number, number[]>
 }
 
+// Per weekday: opening window, null = closed all day, missing = unknown (not enough history yet).
 export interface OpeningHours {
-  [weekday: number]: { open: number; close: number; is24h?: boolean } | null
+  [weekday: number]: { open: number; close: number; is24h?: boolean } | null | undefined
 }
+
+// A weekday is only judged once this many days of it were recorded (nearly) completely.
+const MIN_COMPLETE_DAYS_PER_WEEKDAY = 2
+const MIN_HOURS_FOR_COMPLETE_DAY = 20
 
 function toNumber(value: unknown): number {
   if (typeof value === 'object' && value !== null && 'toNumber' in value && typeof (value as { toNumber?: unknown }).toNumber === 'function') {
@@ -147,18 +159,23 @@ export function buildProfiles(rows: OccupancyHistoryRow[]): {
     const weekday = toNumber(row.weekday)
     const hour = toNumber(row.hour)
     const count = toNumber(row.count)
+    const rawCount = toNumber(row.raw_count ?? row.count)
     const maxCapacity = toNumber(row.max_count)
 
     const bucket = dayBuckets.get(dayKey) ?? {
       weekday,
       maxCapacity,
       hourlyValues: new Map<number, number[]>(),
+      rawHourlyValues: new Map<number, number[]>(),
     }
 
     bucket.maxCapacity = Math.max(bucket.maxCapacity, maxCapacity)
     const values = bucket.hourlyValues.get(hour) ?? []
     values.push(count)
     bucket.hourlyValues.set(hour, values)
+    const rawValues = bucket.rawHourlyValues.get(hour) ?? []
+    rawValues.push(rawCount)
+    bucket.rawHourlyValues.set(hour, rawValues)
     dayBuckets.set(dayKey, bucket)
   }
 
@@ -197,10 +214,12 @@ export function buildProfiles(rows: OccupancyHistoryRow[]): {
 export function inferOpeningHoursFromBuckets(dayBuckets: Map<string, DayBucket>): OpeningHours {
   const wdHourChanges = Array.from({ length: 7 }, () => Array(24).fill(0))
   const wdHourTotals = Array.from({ length: 7 }, () => Array(24).fill(0))
+  const wdCompleteDays = Array(7).fill(0)
 
   for (const bucket of dayBuckets.values()) {
     const wd = bucket.weekday
-    for (const [h, vals] of bucket.hourlyValues.entries()) {
+    if (bucket.rawHourlyValues.size >= MIN_HOURS_FOR_COMPLETE_DAY) wdCompleteDays[wd] += 1
+    for (const [h, vals] of bucket.rawHourlyValues.entries()) {
       if (vals.length > 1) {
         let ch = 0
         for (let i = 1; i < vals.length; i++) {
@@ -215,6 +234,9 @@ export function inferOpeningHoursFromBuckets(dayBuckets: Map<string, DayBucket>)
   const result: OpeningHours = {}
 
   for (let wd = 0; wd < 7; wd++) {
+    // Too little history (new gym, first partial day): unknown instead of "closed all day".
+    if (wdCompleteDays[wd] < MIN_COMPLETE_DAYS_PER_WEEKDAY) continue
+
     const activeHours: number[] = []
     for (let h = 0; h < 24; h++) {
       const tot = wdHourTotals[wd][h]
@@ -294,89 +316,247 @@ export function resolveProfileValue(
 }
 
 export async function fetchHistory(prisma: PrismaClient, gymId: string, lookbackDays?: number): Promise<OccupancyHistoryRow[]> {
-  if (lookbackDays) {
-    return prisma.$queryRaw<OccupancyHistoryRow[]>`
+  const rows = lookbackDays
+    ? await prisma.$queryRaw<OccupancyHistoryRow[]>`
       SELECT
         TO_CHAR((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin'), 'YYYY-MM-DD') as local_day,
         EXTRACT(DOW FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as weekday,
         EXTRACT(HOUR FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as hour,
+        "timestamp",
         count,
         "maxCount" as max_count
       FROM "Occupancy"
       WHERE "gymId" = ${gymId}
+        AND "maxCount" > 0
         AND "timestamp" >= NOW() - (${lookbackDays} * INTERVAL '1 day')
-      ORDER BY local_day, hour, "timestamp";
+      ORDER BY "timestamp";
     `
-  }
+    : await prisma.$queryRaw<OccupancyHistoryRow[]>`
+      SELECT
+        TO_CHAR((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin'), 'YYYY-MM-DD') as local_day,
+        EXTRACT(DOW FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as weekday,
+        EXTRACT(HOUR FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as hour,
+        "timestamp",
+        count,
+        "maxCount" as max_count
+      FROM "Occupancy"
+      WHERE "gymId" = ${gymId}
+        AND "maxCount" > 0
+      ORDER BY "timestamp";
+    `
 
-  return prisma.$queryRaw<OccupancyHistoryRow[]>`
-    SELECT
-      TO_CHAR((("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin'), 'YYYY-MM-DD') as local_day,
-      EXTRACT(DOW FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as weekday,
-      EXTRACT(HOUR FROM (("timestamp" AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')) as hour,
-      count,
-      "maxCount" as max_count
-    FROM "Occupancy"
-    WHERE "gymId" = ${gymId}
-    ORDER BY local_day, hour, "timestamp";
-  `
+  const [holidays, gym] = await Promise.all([getHolidays(), prisma.gym.findUnique({ where: { id: gymId }, select: { unit: true } })])
+  return finalizeHistoryRows(rows, gym?.unit === 'percent', holidays)
 }
 
-export async function buildStableAggregatedData(
-  prisma: PrismaClient,
-  gymId: string,
-  lookbackDays?: number
-): Promise<StableAggregatedPoint[]> {
-  const rows = await fetchHistory(prisma, gymId, lookbackDays)
-  const { weekdayHourProfile, hourProfile, overallProfile, maxCapacity, dayBuckets } = buildProfiles(rows)
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
+/**
+ * Turns raw samples into what the forecast works with: ghost-corrected counts (not for percentage sources,
+ * which have no ghosts) and holidays mapped to Sunday.
+ */
+export function finalizeHistoryRows(rows: OccupancyHistoryRow[], isPercentSource: boolean, holidays: Set<string>): OccupancyHistoryRow[] {
+  const corrected = isPercentSource ? rows.map((row) => ({ ...row, raw_count: toNumber(row.count) })) : withGhostCorrection(rows)
+  return corrected.map((row) =>
+    holidays.has(row.local_day) ? { ...row, weekday: BigInt(effectiveWeekday(toNumber(row.weekday), row.local_day, holidays)) } : row
+  )
+}
+
+export function withGhostCorrection(rows: OccupancyHistoryRow[]): OccupancyHistoryRow[] {
+  const samples = rows.map((row) => ({
+    time: new Date(row.timestamp).getTime(),
+    hour: toNumber(row.hour),
+    count: toNumber(row.count),
+  }))
+  const { adjusted } = correctGhosts(samples)
+
+  return rows.map((row, index) => ({ ...row, raw_count: samples[index].count, count: adjusted[index] }))
+}
+
+/**
+ * Ghost correction over a long history as the live system does it: every week is corrected with the model
+ * fitted on the 56 days ending with that week (one model for months of data would mix seasons).
+ */
+export function withRollingGhostCorrection(rows: OccupancyHistoryRow[], windowDays = 56, stepDays = 7): OccupancyHistoryRow[] {
+  if (rows.length === 0) return rows
+
+  const dayMs = 86_400_000
+  const samples = rows.map((row) => ({
+    time: new Date(row.timestamp).getTime(),
+    hour: toNumber(row.hour),
+    count: toNumber(row.raw_count ?? row.count),
+  }))
+  const result = rows.map((row, index) => ({ ...row, raw_count: samples[index].count }))
+
+  let windowStart = 0
+  let stepStartIndex = 0
+  for (let stepStart = samples[0].time; stepStartIndex < samples.length; stepStart += stepDays * dayMs) {
+    const stepEnd = stepStart + stepDays * dayMs
+    let stepEndIndex = stepStartIndex
+    while (stepEndIndex < samples.length && samples[stepEndIndex].time < stepEnd) stepEndIndex += 1
+    while (samples[windowStart].time < stepEnd - windowDays * dayMs) windowStart += 1
+    if (stepEndIndex === stepStartIndex) continue
+
+    const windowSamples = samples.slice(windowStart, stepEndIndex)
+    const { adjusted } = correctGhosts(windowSamples)
+    for (let i = stepStartIndex; i < stepEndIndex; i += 1) {
+      result[i].count = adjusted[i - windowStart]
+    }
+    stepStartIndex = stepEndIndex
+  }
+
+  return result
+}
+
+// Least-squares slope of the (corrected) count over the last windows, weighted towards the shortest window.
+function slopePer10MinFromRows(rows: OccupancyHistoryRow[], windows: Array<{ minutes: number; weight: number }>, nowMs = Date.now()): number {
+  let aggregateSlope = 0
+  let weights = 0
+
+  for (const { minutes, weight } of windows) {
+    const startMs = nowMs - minutes * 60 * 1000
+    const recent: Array<{ t: number; v: number }> = []
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      const t = new Date(rows[i].timestamp).getTime()
+      if (t < startMs) break
+      recent.push({ t: t / 60000, v: toNumber(rows[i].count) })
+    }
+
+    if (recent.length < 2) continue
+
+    const n = recent.length
+    const meanT = recent.reduce((sum, r) => sum + r.t, 0) / n
+    const meanV = recent.reduce((sum, r) => sum + r.v, 0) / n
+    let num = 0
+    let den = 0
+    for (const r of recent) {
+      num += (r.t - meanT) * (r.v - meanV)
+      den += (r.t - meanT) * (r.t - meanT)
+    }
+
+    aggregateSlope += (den === 0 ? 0 : num / den) * 10 * weight
+    weights += weight
+  }
+
+  return weights === 0 ? 0 : aggregateSlope / weights
+}
+
+/**
+ * Weekly profile (median per weekday and hour) from the hourly rollup. `opening` should be the current
+ * schedule from the recent history, so old periods with other opening hours do not leak into it.
+ */
+export function buildAggregatedFromHourly(rows: HourlyRow[], opening: OpeningHours | null): StableAggregatedPoint[] {
+  const historyRows: OccupancyHistoryRow[] = rows.map((row) => ({
+    local_day: row.localDay,
+    weekday: BigInt(row.weekday),
+    hour: BigInt(row.hour),
+    timestamp: new Date(0),
+    count: row.meanCount,
+    max_count: row.maxCount,
+  }))
+  const { weekdayHourProfile, hourProfile, overallProfile, maxCapacity } = buildProfiles(historyRows)
 
   return Array.from({ length: 7 }, (_, weekday) =>
     Array.from({ length: 24 }, (_, hour) => ({
       weekday,
       hour,
-      median_count: Math.round(resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, weekday, hour, inferredOpening)),
+      median_count: Math.round(resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, weekday, hour, opening)),
       max_capacity: maxCapacity,
     }))
   ).flat()
 }
 
-export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: string): Promise<DailyTrendPoint[]> {
-  const rows = await fetchHistory(prisma, gymId, 56)
-  const { weekdayHourProfile, hourProfile, overallProfile, dayBuckets } = buildProfiles(rows)
+/**
+ * How much of today's current deviation from the usual curve is carried into the following hours.
+ * deltaWeights[0] applies to the next hour, [1] to the hour after, and so on; later hours use the plain
+ * profile. slopeWeight scales the recent trend that is added to the next hour only.
+ */
+export interface ForecastTuning {
+  deltaWeights: number[]
+  slopeWeight: number
+}
 
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
-  openingHoursCache.set(gymId, { opening: inferredOpening, expiry: Date.now() + 60 * 60 * 1000 })
+// Backtested on ghost-corrected history (6 gyms, Aug-Nov 2026, full 56 day pipeline, 11 times per hour):
+// today's deviation persists much longer than the former 0.5 / 0.2 assumed. The weights are the measured
+// optimum per horizon, smoothed; beyond +13 h the data runs out and the decline is simply continued.
+// Together with the rolling deviation below, the mean error on Oct-Nov (not used for fitting) drops by
+// 9 % at +1 h, 6 % at +2 h, 7 % at +3 h, 5 % at +4..+5 h and 4 % at +6..+13 h. Re-check with winter data.
+export const FORECAST_TUNING: ForecastTuning = {
+  deltaWeights: [0.7, 0.6, 0.55, 0.5, 0.45, 0.45, 0.45, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05],
+  slopeWeight: 0.1,
+}
 
-  const todayKey = getBerlinDateKey(new Date())
-  const currentHourBerlin = getBerlinHour(new Date())
-  const todayBucket = dayBuckets.get(todayKey)
-  const todayWeekday = todayBucket?.weekday ?? getBerlinWeekday(new Date())
+/** Everything the forecast needs from the history, independent of the tuning. */
+export interface TodayAnalysis {
+  weekday: number
+  currentHour: number
+  /** Usual value for each hour of today (profile median, unrounded). */
+  baselineByHour: number[]
+  openByHour: boolean[]
+  /** Hourly means measured so far today. */
+  actualByHour: Map<number, number>
+  nowcastCurrent: number | null
+  currentHourSampleCount: number
+  /** Current deviation from the usual curve, from the samples of the last hour (see deviationFromProfile). */
+  currentDelta: number
+  slopePer10Min: number
+  maxCapacity: number
+  opening: OpeningHours
+}
 
-  // compute recent slope (per 10 minutes) from DB to nudge short-term forecast
-  const windowMinutes = 30
-  const recentRows = await prisma.$queryRaw<{ count: number; timestamp: Date }[]>`
-    SELECT count, "timestamp" FROM "Occupancy"
-    WHERE "gymId" = ${gymId} AND "timestamp" >= NOW() - (${windowMinutes} * INTERVAL '1 minute')
-    ORDER BY "timestamp" ASC
-  `
+/**
+ * Usual value at a point in time: the hourly profile values describe the middle of their hour, so the value
+ * in between is interpolated. Neighbouring hours that are closed are ignored, which keeps opening and
+ * closing time from looking like a deviation.
+ */
+function profileAt(baselineByHour: number[], openByHour: boolean[], hourFraction: number): number {
+  const hour = Math.min(23, Math.floor(hourFraction))
+  const frac = hourFraction - hour
 
-  let slopePer10Min = 0
-  if (recentRows && recentRows.length >= 3) {
-    const times = recentRows.map((r) => new Date(r.timestamp).getTime() / 60000) // minutes
-    const vals = recentRows.map((r) => Number(r.count))
-    const n = vals.length
-    const meanT = times.reduce((a, b) => a + b, 0) / n
-    const meanV = vals.reduce((a, b) => a + b, 0) / n
-    let num = 0
-    let den = 0
-    for (let i = 0; i < n; i++) {
-      num += (times[i] - meanT) * (vals[i] - meanV)
-      den += (times[i] - meanT) * (times[i] - meanT)
-    }
-    const slopePerMinute = den === 0 ? 0 : num / den
-    slopePer10Min = slopePerMinute * 10
+  if (frac >= 0.5) {
+    const w = frac - 0.5
+    const next = hour + 1 <= 23 && openByHour[hour + 1] ? baselineByHour[hour + 1] : baselineByHour[hour]
+    return baselineByHour[hour] * (1 - w) + next * w
   }
+
+  const w = frac + 0.5
+  const previous = hour - 1 >= 0 && openByHour[hour - 1] ? baselineByHour[hour - 1] : baselineByHour[hour]
+  return previous * (1 - w) + baselineByHour[hour] * w
+}
+
+/**
+ * Deviation of the last hour's samples from the usual curve at the moment of each sample, smoothed towards the
+ * newest. Comparing every sample with the profile at its own time (and not the current samples with the
+ * hourly average) avoids a bias on rising or falling curves; reaching back across the hour boundary keeps the
+ * estimate stable early in an hour. Needs at least two samples today.
+ */
+function deviationFromProfile(rows: OccupancyHistoryRow[], todayKey: string, baselineByHour: number[], openByHour: boolean[]): number {
+  const deviations: number[] = []
+  for (let i = rows.length - 1; i >= 0 && deviations.length < 12; i -= 1) {
+    if (rows[i].local_day !== todayKey) break
+    const time = new Date(rows[i].timestamp).getTime()
+    // Berlin offsets are whole hours, so the minute of the UTC time is the minute of the local hour
+    const hourFraction = toNumber(rows[i].hour) + (time % 3_600_000) / 3_600_000
+    deviations.unshift(toNumber(rows[i].count) - profileAt(baselineByHour, openByHour, hourFraction))
+  }
+
+  return deviations.length >= 2 ? (ewma(deviations, 0.45) ?? 0) : 0
+}
+
+function ewma(values: number[], alpha = 0.4): number | null {
+  let s: number | null = null
+  for (const v of values) {
+    s = s === null ? v : alpha * v + (1 - alpha) * s
+  }
+  return s
+}
+
+export function analyzeToday(rows: OccupancyHistoryRow[], now: Date, holidays: Set<string>): TodayAnalysis {
+  const { weekdayHourProfile, hourProfile, overallProfile, dayBuckets } = buildProfiles(rows)
+  const opening = inferOpeningHoursFromBuckets(dayBuckets)
+
+  const todayKey = getBerlinDateKey(now)
+  const currentHour = getBerlinHour(now)
+  const todayBucket = dayBuckets.get(todayKey)
+  const weekday = todayBucket?.weekday ?? effectiveWeekday(getBerlinWeekday(now), todayKey, holidays)
 
   const actualByHour = new Map<number, number>()
   if (todayBucket) {
@@ -388,149 +568,93 @@ export async function buildTodayForecastSeries(prisma: PrismaClient, gymId: stri
     }
   }
 
-  function ewma(values: number[], alpha = 0.4) {
-    let s: number | null = null
-    for (const v of values) {
-      if (s === null) s = v
-      else s = alpha * v + (1 - alpha) * s
-    }
-    return s ?? null
-  }
-  // prepare recent samples for current hour (for nowcast)
-  const currentHourSamples = todayBucket ? (todayBucket.hourlyValues.get(currentHourBerlin) ?? []).slice(-12).map((v) => Number(v)) : []
+  // recent samples of the current hour (nowcast)
+  const currentHourSamples = todayBucket ? (todayBucket.hourlyValues.get(currentHour) ?? []).slice(-12).map((v) => Number(v)) : []
   const nowcastCurrent = currentHourSamples.length > 0 ? ewma(currentHourSamples, 0.45) : null
 
-  const baselineCurrent = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, currentHourBerlin, inferredOpening)
-  const currentDelta = nowcastCurrent !== null && currentHourSamples.length >= 2 ? nowcastCurrent - baselineCurrent : 0
-  const maxCapacity = dayBuckets.values().next().value?.maxCapacity ?? 160
+  const baselineByHour = Array.from({ length: 24 }, (_, hour) =>
+    resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, weekday, hour, opening)
+  )
+  const openByHour = Array.from({ length: 24 }, (_, hour) => withinOpeningHours(opening, weekday, hour))
+  const currentDelta = deviationFromProfile(rows, todayKey, baselineByHour, openByHour)
+
+  return {
+    weekday,
+    currentHour,
+    baselineByHour,
+    openByHour,
+    actualByHour,
+    nowcastCurrent,
+    currentHourSampleCount: currentHourSamples.length,
+    currentDelta,
+    // recent slope (per 10 minutes) to nudge the short-term forecast
+    slopePer10Min: slopePer10MinFromRows(rows, [{ minutes: 30, weight: 1 }], now.getTime()),
+    maxCapacity: dayBuckets.values().next().value?.maxCapacity ?? 160,
+    opening,
+  }
+}
+
+export function assembleTodaySeries(analysis: TodayAnalysis, tuning: ForecastTuning = FORECAST_TUNING): DailyTrendPoint[] {
+  const { currentHour, baselineByHour, openByHour, actualByHour, nowcastCurrent, currentHourSampleCount, currentDelta, maxCapacity } = analysis
+
   const maxSlopeAdj = Math.round(maxCapacity * 0.05)
-  // Damp slope (0.2 factor) and bound by +/-5% max capacity to prevent overshooting
-  const dampedSlopeAdj = Math.max(-maxSlopeAdj, Math.min(Math.round(slopePer10Min * 6 * 0.2), maxSlopeAdj))
+  // Damped slope, bounded by +/-5% of the capacity to prevent overshooting
+  const dampedSlopeAdj = Math.max(-maxSlopeAdj, Math.min(Math.round(analysis.slopePer10Min * 6 * tuning.slopeWeight), maxSlopeAdj))
 
   return Array.from({ length: 24 }, (_, hour) => {
     const actual = actualByHour.get(hour) ?? null
-    const isOpenThisHour = withinOpeningHours(inferredOpening, todayWeekday, hour)
+    const isOpenThisHour = openByHour[hour]
+    const hoursAhead = hour - currentHour
     let forecast: number | null = null
 
-    if (hour < currentHourBerlin) {
+    if (hoursAhead < 0) {
       // Past hours: NO forecast! Must strictly be null so forecast line only starts from now
       forecast = null
     } else if (!isOpenThisHour) {
       // Future hours that are closed: forecast drops to 0
       forecast = 0
-    } else if (hour === currentHourBerlin) {
+    } else if (hoursAhead === 0) {
       // Current hour: anchor forecast to live actual count if available, otherwise nowcast / baseline
       const liveActual = actual !== null ? Math.round(actual) : null
-      forecast = liveActual ?? (nowcastCurrent !== null && currentHourSamples.length >= 2 ? Math.round(nowcastCurrent) : Math.round(baselineCurrent))
-    } else if (hour === currentHourBerlin + 1) {
-      // Next hour: autoregressive delta decay (50% of today's current deviation) + bounded micro-slope
-      const baseline = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
-      const projected = Math.round(baseline + 0.5 * currentDelta) + dampedSlopeAdj
-      forecast = Math.max(0, Math.min(projected, maxCapacity))
-    } else if (hour === currentHourBerlin + 2) {
-      // +2h: autoregressive delta decay (20% of today's current deviation) mean-reverting toward baseline
-      const baseline = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
-      const projected = Math.round(baseline + 0.2 * currentDelta)
+      forecast = liveActual ?? (nowcastCurrent !== null && currentHourSampleCount >= 2 ? Math.round(nowcastCurrent) : Math.round(baselineByHour[currentHour]))
+    } else if (hoursAhead <= tuning.deltaWeights.length) {
+      // Autoregressive delta decay: part of today's current deviation carries over, mean-reverting to the profile
+      const slope = hoursAhead === 1 ? dampedSlopeAdj : 0
+      const projected = Math.round(baselineByHour[hour] + tuning.deltaWeights[hoursAhead - 1] * currentDelta) + slope
       forecast = Math.max(0, Math.min(projected, maxCapacity))
     } else {
       // Further future hours: use stable baseline
-      const base = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, todayWeekday, hour, inferredOpening)
-      forecast = Math.round(base)
+      forecast = Math.round(baselineByHour[hour])
     }
 
     return {
       hour,
-      actual_count: hour > currentHourBerlin ? null : (!isOpenThisHour ? (actual !== null ? 0 : null) : (actual !== null ? Math.round(actual) : null)),
+      actual_count: hour > currentHour ? null : (!isOpenThisHour ? (actual !== null ? 0 : null) : (actual !== null ? Math.round(actual) : null)),
       forecast_count: forecast,
+      // What this hour usually looks like on this weekday (56 day median), for comparison with today
+      typical_count: isOpenThisHour ? Math.round(baselineByHour[hour]) : 0,
     }
   })
 }
 
-export async function buildStableTrendDirection(
-  prisma: PrismaClient,
-  gymId: string,
-  currentCount: number,
-  timestamp: Date,
-  fallbackTolerance = 0.08
-): Promise<'up' | 'down' | 'equal'> {
-  // compute minute-based slope over multiple windows for robust detection
-  const windows = [10, 30, 60] // minutes
-  let aggregateSlope = 0
-  let weights = 0
-  for (const windowMinutes of windows) {
-    const recent = await prisma.$queryRaw<{ count: number; timestamp: Date }[]>`
-      SELECT count, "timestamp" FROM "Occupancy"
-      WHERE "gymId" = ${gymId} AND "timestamp" >= NOW() - (${windowMinutes} * INTERVAL '1 minute')
-      ORDER BY "timestamp" ASC
-    `
-
-    if (!recent || recent.length < 2) continue
-
-    const times = recent.map((r) => new Date(r.timestamp).getTime() / 60000) // minutes
-    const vals = recent.map((r) => Number(r.count))
-    const n = vals.length
-    const meanT = times.reduce((a, b) => a + b, 0) / n
-    const meanV = vals.reduce((a, b) => a + b, 0) / n
-    let num = 0
-    let den = 0
-    for (let i = 0; i < n; i++) {
-      num += (times[i] - meanT) * (vals[i] - meanV)
-      den += (times[i] - meanT) * (times[i] - meanT)
-    }
-    const slopePerMinute = den === 0 ? 0 : num / den
-    const slopePer10Min = slopePerMinute * 10
-    const w = windowMinutes === 10 ? 3 : windowMinutes === 30 ? 2 : 1
-    aggregateSlope += slopePer10Min * w
-    weights += w
-  }
-
-  const slopePer10Min = weights === 0 ? 0 : aggregateSlope / weights
-
-  // baseline expectation for current hour
-  const rows = await fetchHistory(prisma, gymId, 56)
-  const { weekdayHourProfile, hourProfile, overallProfile, dayBuckets } = buildProfiles(rows)
-  const inferredOpening = inferOpeningHoursFromBuckets(dayBuckets)
-  openingHoursCache.set(gymId, { opening: inferredOpening, expiry: Date.now() + 60 * 60 * 1000 })
-  const weekday = getBerlinWeekday(timestamp)
-  const hour = getBerlinHour(timestamp)
-
-  if (!withinOpeningHours(inferredOpening, weekday, hour)) return 'equal'
-
-  const expected = resolveProfileValue(weekdayHourProfile, hourProfile, overallProfile, weekday, hour, inferredOpening)
-  const tolerance = Math.max(3, expected * fallbackTolerance)
-  if (currentCount > expected + tolerance && slopePer10Min > 1) return 'up'
-  if (currentCount < expected - tolerance && slopePer10Min < -1) return 'down'
-  return 'equal'
+/** Forecast for the rest of the day as of `now`, from history rows that end at `now`. */
+export function computeTodayForecast(
+  rows: OccupancyHistoryRow[],
+  now: Date,
+  holidays: Set<string>,
+  tuning: ForecastTuning = FORECAST_TUNING
+): { series: DailyTrendPoint[]; opening: OpeningHours } {
+  const analysis = analyzeToday(rows, now, holidays)
+  return { series: assembleTodaySeries(analysis, tuning), opening: analysis.opening }
 }
 
-// exported helper: compute slope per 10 minutes for a gym using multiple windows
-export async function computeSlopePer10Min(prisma: PrismaClient, gymId: string): Promise<number> {
-  const windows = [10, 30, 60]
-  let aggregateSlope = 0
-  let weights = 0
-  for (const windowMinutes of windows) {
-    const recent = await prisma.$queryRaw<{ count: number; timestamp: Date }[]>`
-      SELECT count, "timestamp" FROM "Occupancy"
-      WHERE "gymId" = ${gymId} AND "timestamp" >= NOW() - (${windowMinutes} * INTERVAL '1 minute')
-      ORDER BY "timestamp" ASC
-    `
-    if (!recent || recent.length < 2) continue
-    const times = recent.map((r) => new Date(r.timestamp).getTime() / 60000)
-    const vals = recent.map((r) => Number(r.count))
-    const n = vals.length
-    const meanT = times.reduce((a, b) => a + b, 0) / n
-    const meanV = vals.reduce((a, b) => a + b, 0) / n
-    let num = 0
-    let den = 0
-    for (let i = 0; i < n; i++) {
-      num += (times[i] - meanT) * (vals[i] - meanV)
-      den += (times[i] - meanT) * (times[i] - meanT)
-    }
-    const slopePerMinute = den === 0 ? 0 : num / den
-    const slopePer10Min = slopePerMinute * 10
-    const w = windowMinutes === 10 ? 3 : windowMinutes === 30 ? 2 : 1
-    aggregateSlope += slopePer10Min * w
-    weights += w
-  }
-  return weights === 0 ? 0 : aggregateSlope / weights
+export async function buildTodayForecastSeries(
+  prisma: PrismaClient,
+  gymId: string,
+  historyRows?: OccupancyHistoryRow[]
+): Promise<DailyTrendPoint[]> {
+  const rows = historyRows ?? (await fetchHistory(prisma, gymId, 56))
+  const { series, opening } = computeTodayForecast(rows, new Date(), await getHolidays())
+  openingHoursCache.set(gymId, { opening, expiry: Date.now() + 60 * 60 * 1000 })
+  return series
 }

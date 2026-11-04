@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       data: {
         gymId,
         occupancyCount: normalizeOptionalInteger(body.occupancyCount),
+        estimatedCount: normalizeOptionalInteger(body.estimatedCount),
         waitTimeRating: normalizeRating(body.waitTimeRating),
         densityRating: normalizeRating(body.densityRating),
         wouldGoRating: normalizeRating(body.wouldGoRating),

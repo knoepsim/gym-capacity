@@ -1,24 +1,38 @@
-
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { MoveRight, Star, TrendingDown, TrendingUp } from 'lucide-react'
+import { Activity, Clock, MoveRight, Star, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { DailyTrendChart, type DailyTrendPoint } from '@/app/components/DailyTrendChart'
+import { OCCUPANCY_LEVEL_BADGE, OCCUPANCY_LEVEL_LABEL, occupancyLevel } from '@/app/lib/occupancyLevel'
+import {
+  MIN_HISTORY_DAYS_FOR_RECOMMENDATION,
+  berlinHour,
+  computeDeviation,
+  computeTrend,
+  describeDeviationShort,
+  findBestTime,
+  formatHourWindow,
+} from '@/app/lib/insights'
+import { isStale } from '@/app/lib/staleness'
 import { cn } from '@/lib/utils'
 
 interface GymCardProps {
   id: string
   name: string
+  location?: string
+  region?: string | null
+  unit?: 'persons' | 'percent'
+  hasData?: boolean
   currentCount: number
   maxCount: number
-  lastUpdate: Date | string
+  lastUpdate: Date | string | null
   dailySeries: DailyTrendPoint[]
   isLikelyClosed: boolean
-  closedStableMinutes: number
+  historyDays?: number
   isFavorite?: boolean
   onToggleFavorite?: (gymId: string) => void
 }
@@ -26,143 +40,118 @@ interface GymCardProps {
 export function GymCard({
   id,
   name,
+  location,
+  region = null,
+  unit = 'persons',
+  hasData = true,
   currentCount,
   maxCount,
   lastUpdate,
   dailySeries,
   isLikelyClosed,
-  closedStableMinutes,
+  historyDays = 0,
   isFavorite = false,
   onToggleFavorite,
 }: GymCardProps) {
   const displayCount = isLikelyClosed ? 0 : currentCount
   const percentage = maxCount > 0 ? Math.round((displayCount / maxCount) * 100) : 0
-  const available = Math.max(0, maxCount - displayCount)
+  const level = occupancyLevel(percentage)
 
-  const [minutesAgo, setMinutesAgo] = useState<number | null>(null)
+  // Trend, comparison and recommendation from the shared helpers (same as the detail page)
+  const hour = berlinHour()
+  const stale = hasData && isStale(lastUpdate, region)
+  const forecastReady = historyDays >= MIN_HISTORY_DAYS_FOR_RECOMMENDATION
+  const live = hasData && !isLikelyClosed && !stale
+  const trend = live ? computeTrend(dailySeries, displayCount, maxCount, hour) : null
+  const TrendIcon = trend?.direction === 'up' ? TrendingUp : trend?.direction === 'down' ? TrendingDown : MoveRight
+  const deviation = live && forecastReady ? computeDeviation(dailySeries, displayCount, maxCount, hour) : null
+  const bestTime = !isLikelyClosed && forecastReady ? findBestTime(dailySeries, hour) : null
+  const changeUnit = unit === 'percent' ? 'Pkt.' : 'Personen'
 
-  useEffect(() => {
-    const updateMinutesAgo = () => {
-      setMinutesAgo(Math.floor((Date.now() - new Date(lastUpdate).getTime()) / 60000))
-    }
-
-    updateMinutesAgo()
-    const timer = window.setInterval(updateMinutesAgo, 60_000)
-
-    return () => window.clearInterval(timer)
-  }, [lastUpdate])
-
-  // Trenddaten aus Prognose der nächsten 2 Stunden
-  const now = new Date()
-  const currentHour = Number(
-    new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      hourCycle: 'h23',
-      timeZone: 'Europe/Berlin',
-    }).format(now)
+  const statusBadge = !hasData ? (
+    <Badge variant="outline">Keine Daten</Badge>
+  ) : stale ? (
+    <Badge variant="outline">
+      <TriangleAlert data-icon="inline-start" />
+      Veraltet
+    </Badge>
+  ) : isLikelyClosed ? (
+    <Badge variant="secondary">Geschlossen</Badge>
+  ) : (
+    <Badge variant={OCCUPANCY_LEVEL_BADGE[level]}>{OCCUPANCY_LEVEL_LABEL[level]}</Badge>
   )
-  const nextTwoHours = dailySeries.filter(
-    (d) => (d.hour === currentHour || d.hour === currentHour + 1) && d.forecast_count !== null
-  )
-  const hasTrendData = nextTwoHours.length > 0
-  const avgTrendCount = hasTrendData
-    ? Math.round(nextTwoHours.reduce((sum, d) => sum + (d.forecast_count ?? 0), 0) / nextTwoHours.length)
-    : displayCount
-  const trendDirection = avgTrendCount > displayCount ? 'up' : avgTrendCount < displayCount ? 'down' : 'equal'
-  const trendChange = Math.abs(avgTrendCount - displayCount)
-
-  const getStatusClass = (percent: number) => {
-    if (percent >= 80) return 'bg-destructive text-destructive-foreground'
-    if (percent >= 50) return 'bg-amber-500 text-white'
-    return 'bg-emerald-600 text-white'
-  }
-
-  const getStatusText = (percent: number) => {
-    if (percent >= 80) return 'Sehr voll'
-    if (percent >= 50) return 'Moderat'
-    return 'Leer'
-  }
 
   return (
-    <div className="relative h-full">
-      <Link href={`/${id}`} className="block h-full">
-        <Card className="h-full cursor-pointer overflow-hidden border-border/70 bg-card/90 backdrop-blur transition-all hover:-translate-y-0.5 hover:shadow-lg">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
-            <CardTitle className="text-xl">{name}</CardTitle>
-            <div className="flex items-start gap-3">
-              <Badge className={cn('rounded-md px-2 py-1 text-[11px] uppercase', getStatusClass(percentage))}>
-                {isLikelyClosed ? 'Geschlossen' : getStatusText(percentage)}
-              </Badge>
-              {onToggleFavorite ? (
-                <button
-                  type="button"
-                  className="mt-0.5 inline-flex h-6 w-6 items-center justify-center backdrop-blur transition hover:scale-105"
-                  aria-label={isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
-                  aria-pressed={isFavorite}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    onToggleFavorite(id)
-                  }}
-                >
-                  <Star className={cn('h-4 w-4', isFavorite ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground')} />
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-bold leading-none">{displayCount}</span>
-            <span className="pb-1 text-sm text-muted-foreground">/ {maxCount} Personen</span>
-          </div>
-
-          <div className="space-y-2">
-            <Progress value={percentage} className="h-2.5" />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{percentage}% ausgelastet</span>
-              <span>{available} verfügbar</span>
-            </div>
-          </div>
-
-          {!isLikelyClosed ? (
-            <div className="rounded-lg border bg-muted/40 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Heute & Prognose</p>
-              {hasTrendData ? (
-                <div className="mb-2 flex items-center gap-1 text-sm font-semibold">
-                  {trendDirection === 'up' ? <TrendingUp className="h-4 w-4" /> : null}
-                  {trendDirection === 'down' ? <TrendingDown className="h-4 w-4" /> : null}
-                  {trendDirection === 'equal' ? <MoveRight className="h-4 w-4" /> : null}
-                  {trendChange > 0 ? '+' : ''}{trendChange} Personen (nächste 2h)
-                </div>
-              ) : (
-                <p className="mb-2 text-xs text-muted-foreground">Noch keine Prognose für die nächsten Stunden verfügbar.</p>
-              )}
-              <DailyTrendChart data={dailySeries} height={140} />
-              <div className="mt-2 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-[2px] w-4 bg-primary" />
-                  Heute
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="h-[2px] w-4 border-t-2 border-dashed border-amber-500" />
-                  Prognose
-                </span>
-              </div>
-            </div>
+    <Card className="relative h-full transition-shadow hover:shadow-md">
+      <CardHeader>
+        <CardTitle className="text-lg">
+          {/* Stretched link: the whole card opens the detail page */}
+          <Link href={`/${id}`} className="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none">
+            {name}
+          </Link>
+        </CardTitle>
+        {location ? <CardDescription>{location}</CardDescription> : null}
+        <CardAction className="relative flex items-center gap-1">
+          {statusBadge}
+          {onToggleFavorite ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+              aria-pressed={isFavorite}
+              onClick={() => onToggleFavorite(id)}
+            >
+              <Star className={cn(isFavorite && 'fill-warning text-warning')} />
+            </Button>
           ) : null}
-        </CardContent>
+        </CardAction>
+      </CardHeader>
 
-        <CardFooter className="mt-auto flex items-center justify-between text-xs text-muted-foreground">
-          <span suppressHydrationWarning>
-            {minutesAgo === null ? 'Aktualisiert vor … Min' : `Aktualisiert vor ${minutesAgo} Min`}
-          </span>
-          <span className="font-medium text-foreground">Details ansehen</span>
-        </CardFooter>
-        </Card>
-      </Link>
-    </div>
+      <CardContent className="flex flex-1 flex-col gap-4">
+        {!hasData ? (
+          <p className="text-sm text-muted-foreground">Noch keine Messwerte.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="flex items-baseline gap-2">
+              <span className="text-4xl font-semibold tabular-nums">{unit === 'percent' ? `${percentage}%` : displayCount}</span>
+              <span className="text-sm text-muted-foreground">{unit === 'percent' ? 'ausgelastet' : `Personen · ${percentage} %`}</span>
+            </p>
+            <Progress value={Math.min(percentage, 100)} aria-label="Auslastung" />
+          </div>
+        )}
+
+        {deviation || trend || bestTime ? (
+          <ul className="flex flex-col gap-1.5 text-sm">
+            {deviation ? (
+              <li className={cn('flex items-center gap-1.5', deviation.level !== 'usual' && 'font-medium')}>
+                <Activity className="size-4 shrink-0 text-muted-foreground" />
+                {describeDeviationShort(deviation)}
+              </li>
+            ) : null}
+            {trend ? (
+              <li className="flex items-center gap-1.5">
+                <TrendIcon className="size-4 shrink-0 text-muted-foreground" />
+                {trend.direction === 'equal'
+                  ? 'Bleibt in den nächsten 2 h etwa gleich'
+                  : `${trend.change > 0 ? '+' : '−'}${Math.abs(trend.change)} ${changeUnit} in den nächsten 2 h`}
+              </li>
+            ) : null}
+            {bestTime ? (
+              <li className="flex items-center gap-1.5">
+                <Clock className="size-4 shrink-0 text-muted-foreground" />
+                Beste Zeit heute: <span className="font-medium">{formatHourWindow(bestTime)}</span>
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
+
+        {live ? (
+          // Above the stretched link so the chart tooltip stays usable
+          <div className="relative mt-auto">
+            <DailyTrendChart data={dailySeries} height={120} showLegend={false} />
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }

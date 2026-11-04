@@ -155,4 +155,19 @@
   html {
     @apply font-sans;
   }
+
+  /* Tailwind 4 resets buttons to the default cursor: everything clickable gets the pointer back */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="radio"]:not(:disabled),
+  [role="tab"]:not(:disabled),
+  [role="option"]:not([data-disabled]),
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
 }

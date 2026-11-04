@@ -5,18 +5,12 @@ import { Search, SearchX, Star } from 'lucide-react'
 import { GymCard } from './GymCard'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import gymConfig from '@/config/gyms.json'
+import { readFavorites, writeFavorites } from '@/app/lib/favorites'
 import { readRecentGyms } from '@/app/lib/recentGyms'
 
-const FAVORITES_KEY = 'gym-favorites'
 const MAX_RESULTS = 30
 // Region whose studios are suggested before the visitor picked any favorite
 const SUGGESTION_REGION = 'BW'
-
-// Favorites saved under a gym's former ID still point to the renamed gym.
-const CURRENT_ID_BY_PREVIOUS_ID = new Map(
-  gymConfig.flatMap((gym) => (('previousIds' in gym ? gym.previousIds : undefined) ?? []).map((previousId) => [previousId, gym.id] as const))
-)
 
 const REGION_NAMES: Record<string, string> = {
   BW: 'Baden-Württemberg',
@@ -69,35 +63,6 @@ function normalize(value: string): string {
 
 function searchText(gym: OverviewGym): string {
   return normalize([gym.name, gym.city, gym.region, gym.region ? REGION_NAMES[gym.region] : null].filter(Boolean).join(' '))
-}
-
-function readFavorites(): string[] {
-  if (typeof window === 'undefined') {
-    return []
-  }
-
-  try {
-    const raw = window.localStorage.getItem(FAVORITES_KEY)
-    const parsed = raw ? (JSON.parse(raw) as unknown) : []
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    const ids = parsed
-      .filter((value): value is string => typeof value === 'string')
-      .map((id) => CURRENT_ID_BY_PREVIOUS_ID.get(id) ?? id)
-    return Array.from(new Set(ids))
-  } catch {
-    return []
-  }
-}
-
-function writeFavorites(ids: string[]) {
-  try {
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids))
-  } catch {
-    // Storage unavailable (private mode): favorites only last for this visit.
-  }
 }
 
 export function OverviewClient({ gyms }: OverviewClientProps) {

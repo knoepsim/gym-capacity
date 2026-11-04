@@ -145,8 +145,8 @@ export function GymCard({
           </ul>
         ) : null}
 
-        {live ? (
-          // Above the stretched link so the chart tooltip stays usable
+        {hasData ? (
+          // Today's curve is shown even when the gym is closed. Above the stretched link so the tooltip stays usable
           <div className="relative mt-auto">
             <DailyTrendChart data={dailySeries} height={120} showLegend={false} />
           </div>

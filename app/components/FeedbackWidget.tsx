@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { MessageSquarePlus } from 'lucide-react'
+import { Angry, Frown, Laugh, Meh, MessageSquarePlus, Smile, type LucideIcon } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,17 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 import { FEEDBACK_IMPRESSIONS } from '@/app/lib/feedbackScale'
+
+// One face per step, coloured like the occupancy levels: quiet = green, medium = amber, packed = red
+const IMPRESSION_FACE: Record<number, { icon: LucideIcon; tone: string }> = {
+  5: { icon: Laugh, tone: 'text-success' },
+  4: { icon: Smile, tone: 'text-success' },
+  3: { icon: Meh, tone: 'text-warning' },
+  2: { icon: Frown, tone: 'text-destructive' },
+  1: { icon: Angry, tone: 'text-destructive' },
+}
 
 // Feedback for one studio; rendered on its detail page. The current reading is deliberately not shown in the
 // form: members should judge by what they see, not by the number the app displays.
@@ -121,11 +131,19 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
             aria-label="Eindruck"
             className="grid w-full grid-cols-5"
           >
-            {FEEDBACK_IMPRESSIONS.map((entry) => (
-              <ToggleGroupItem key={entry.rating} value={String(entry.rating)} className="px-1 text-xs sm:text-sm">
-                {entry.label}
-              </ToggleGroupItem>
-            ))}
+            {FEEDBACK_IMPRESSIONS.map((entry) => {
+              const { icon: Face, tone } = IMPRESSION_FACE[entry.rating]
+              return (
+                <ToggleGroupItem
+                  key={entry.rating}
+                  value={String(entry.rating)}
+                  className="h-auto flex-col gap-1.5 px-1 py-3 text-xs sm:text-sm"
+                >
+                  <Face className={cn('size-8', tone)} />
+                  {entry.label}
+                </ToggleGroupItem>
+              )
+            })}
           </ToggleGroup>
 
           <Field data-invalid={!estimateValid || undefined}>

@@ -526,7 +526,7 @@ function profileAt(baselineByHour: number[], openByHour: boolean[], hourFraction
  * Deviation of the last hour's samples from the usual curve at the moment of each sample, smoothed towards the
  * newest. Comparing every sample with the profile at its own time (and not the current samples with the
  * hourly average) avoids a bias on rising or falling curves; reaching back across the hour boundary keeps the
- * estimate stable early in an hour. Needs at least two samples today.
+ * estimate stable early in an hour. Needs at least two samples from open hours today.
  */
 function deviationFromProfile(rows: OccupancyHistoryRow[], todayKey: string, baselineByHour: number[], openByHour: boolean[]): number {
   const deviations: number[] = []
@@ -535,6 +535,8 @@ function deviationFromProfile(rows: OccupancyHistoryRow[], todayKey: string, bas
     const time = new Date(rows[i].timestamp).getTime()
     // Berlin offsets are whole hours, so the minute of the UTC time is the minute of the local hour
     const hourFraction = toNumber(rows[i].hour) + (time % 3_600_000) / 3_600_000
+    // Samples from closed hours are leftovers of the counter, not people: the usual value there is 0
+    if (!openByHour[Math.min(23, Math.floor(hourFraction))]) continue
     deviations.unshift(toNumber(rows[i].count) - profileAt(baselineByHour, openByHour, hourFraction))
   }
 

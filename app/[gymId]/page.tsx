@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DailyTrendChart } from '@/app/components/DailyTrendChart'
+import { FavoriteToggle } from '@/app/components/FavoriteToggle'
 import { FeedbackWidget } from '@/app/components/FeedbackWidget'
 import { RecentGymTracker } from '@/app/components/RecentGymTracker'
 import { getCachedGymSnapshot } from '@/app/lib/gymSnapshot'
@@ -103,9 +104,12 @@ export default async function GymDetailPage({ params }: PageProps) {
             Übersicht
           </Link>
         </Button>
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{gymInfo.name}</h1>
-          {location ? <p className="text-muted-foreground">{location}</p> : null}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">{gymInfo.name}</h1>
+            {location ? <p className="text-muted-foreground">{location}</p> : null}
+          </div>
+          <FavoriteToggle gymId={gymId} />
         </div>
       </div>
 

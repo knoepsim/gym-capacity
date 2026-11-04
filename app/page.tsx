@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { OverviewClient, type OverviewGym } from './components/OverviewClient'
 import gyms from '@/config/gyms.json'
+import { Badge } from '@/components/ui/badge'
 import { prisma } from '@/lib/prisma'
 import type { GymSnapshot } from './lib/gymSnapshot'
+import { BASE_INTERVAL_MINUTES, intervalMinutesFor } from './lib/polling'
 
 const GYM_CONFIG_BY_ID = Object.fromEntries(gyms.map((gym) => [gym.id, gym])) as Record<
   string,
@@ -66,7 +68,18 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pt-8 pb-24 sm:px-6 lg:px-8">
-      <h1 className="sr-only">Gym Auslastung</h1>
+      <header className="flex flex-col gap-3">
+        <h1 className="font-heading text-3xl font-semibold tracking-tight sm:text-4xl">Wie voll ist dein Studio?</h1>
+        <p className="max-w-2xl text-muted-foreground">
+          Live-Auslastung mit Prognose und bester Trainingszeit für den heutigen Tag.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{overviewGyms.length} Studios</Badge>
+          <Badge variant="outline">
+            Aktualisiert alle {BASE_INTERVAL_MINUTES}–{intervalMinutesFor(null)} Minuten
+          </Badge>
+        </div>
+      </header>
       <OverviewClient gyms={overviewGyms} />
     </main>
   )

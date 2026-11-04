@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import AutoRefresh from './components/AutoRefresh'
 import { OfflineBlocker } from './components/OfflineBlocker'
@@ -9,7 +9,9 @@ import { SiteHeader } from './components/SiteHeader'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
+// Inter for text, controls and numbers (tabular figures); Plus Jakarta Sans for headings and titles
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" })
 
 export const metadata: Metadata = {
   title: "Fitness Studio Auslastung",
@@ -22,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="de" className={inter.variable} suppressHydrationWarning>
+    <html lang="de" className={`${inter.variable} ${jakarta.variable}`} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9fafb" />

@@ -12,12 +12,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get('x-api-key')
-    const expectedApiKey = process.env.EXPORT_API_KEY || process.env.FETCH_API_KEY
-
-    if (expectedApiKey && apiKey !== expectedApiKey) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Access is restricted to the admin login by middleware.ts
 
     const params = request.nextUrl?.searchParams
     const sinceParam = params?.get('since')

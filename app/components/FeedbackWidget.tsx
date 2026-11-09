@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from 'react'
-import { Angry, Frown, Laugh, Meh, MessageSquarePlus, Smile, type LucideIcon } from 'lucide-react'
+import { Angry, Frown, Laugh, MapPin, Meh, MessageSquarePlus, Smile, type LucideIcon } from 'lucide-react'
 import { usePathname } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -9,11 +9,9 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -21,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { FEEDBACK_IMPRESSIONS } from '@/app/lib/feedbackScale'
+import { readStoredRefToken } from '@/app/lib/refLink'
 
 // One face per step, coloured like the occupancy levels: quiet = green, medium = amber, packed = red
 const IMPRESSION_FACE: Record<number, { icon: LucideIcon; tone: string }> = {
@@ -91,6 +90,7 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
           densityRating: impression,
           comment,
           sourcePath: pathname,
+          ref: readStoredRefToken(),
         }),
       })
 
@@ -110,16 +110,33 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="lg" className="fixed right-6 bottom-6 z-40 rounded-full shadow-lg">
+      {/* Hero banner at the spot where the page was just read; the floating button stays reachable while scrolling */}
+      <section className="flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+            <MapPin className="size-5" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <h2 className="font-heading text-lg font-semibold">Du bist gerade vor Ort?</h2>
+            <p className="text-sm text-muted-foreground">
+              Hilf bei der Prognose mit und melde die aktuell gefühlte Auslastung. Das geht ganz schnell, zum Beispiel in der Satzpause.
+            </p>
+          </div>
+        </div>
+        <Button size="lg" className="shrink-0" onClick={() => setOpen(true)}>
           <MessageSquarePlus data-icon="inline-start" />
           Zustand melden
         </Button>
-      </DialogTrigger>
+      </section>
+      <Button size="lg" className="fixed right-6 bottom-6 z-40 rounded-full shadow-lg" onClick={() => setOpen(true)}>
+        <MessageSquarePlus data-icon="inline-start" />
+        Zustand melden
+      </Button>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Wie voll ist es gerade?</DialogTitle>
-          <DialogDescription>{gymName}</DialogDescription>
+          <DialogTitle>
+            Wie voll ist es gerade im <strong className="font-bold">{gymName}</strong>?
+          </DialogTitle>
         </DialogHeader>
 
         <FieldGroup>
@@ -129,7 +146,7 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
             value={impression === null ? '' : String(impression)}
             onValueChange={(value) => setImpression(value ? Number(value) : null)}
             aria-label="Eindruck"
-            className="grid w-full grid-cols-5"
+            className="flex w-full flex-col gap-2"
           >
             {FEEDBACK_IMPRESSIONS.map((entry) => {
               const { icon: Face, tone } = IMPRESSION_FACE[entry.rating]
@@ -137,17 +154,20 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
                 <ToggleGroupItem
                   key={entry.rating}
                   value={String(entry.rating)}
-                  className="h-auto flex-col gap-1.5 px-1 py-3 text-xs sm:text-sm"
+                  className="h-auto w-full justify-start gap-3 px-3 py-2.5 text-left whitespace-normal"
                 >
-                  <Face className={cn('size-8', tone)} />
-                  {entry.label}
+                  <Face className={cn('size-8 shrink-0', tone)} />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">{entry.label}</span>
+                    <span className="text-xs font-normal text-muted-foreground">{entry.description}</span>
+                  </span>
                 </ToggleGroupItem>
               )
             })}
           </ToggleGroup>
 
           <Field data-invalid={!estimateValid || undefined}>
-            <FieldLabel htmlFor="feedback-estimated-count">Geschätzte Personenzahl (optional)</FieldLabel>
+            <FieldLabel htmlFor="feedback-estimated-count">Geschätzte/Gezählte Personenzahl (optional)</FieldLabel>
             <Input
               id="feedback-estimated-count"
               type="number"
@@ -161,16 +181,19 @@ export function FeedbackWidget({ gymId, gymName }: { gymId: string; gymName: str
               aria-invalid={!estimateValid || undefined}
               className="max-w-40"
             />
-            {estimateValid ? (
-              <FieldDescription>Grob schätzen reicht. Damit wird die Anzeige genauer.</FieldDescription>
-            ) : (
-              <FieldError>Bitte eine ganze Zahl zwischen 0 und 1000 eingeben.</FieldError>
-            )}
+            {!estimateValid ? <FieldError>Bitte eine ganze Zahl zwischen 0 und 1000 eingeben.</FieldError> : null}
           </Field>
 
           <Field>
             <FieldLabel htmlFor="feedback-comment">Anmerkung (optional)</FieldLabel>
-            <Textarea id="feedback-comment" value={comment} onChange={(event) => setComment(event.target.value)} rows={2} />
+            <Textarea
+              id="feedback-comment"
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              rows={2}
+              placeholder="z. B. Angabe ohne Frauenbereich"
+            />
+            <FieldDescription>Was du nicht sehen konntest oder was die Zahl beeinflusst, hilft bei der Einordnung. Alle Infos helfen, gerne auch sehr spezifische Anmerkungen dazu, was dir aufgefallen ist. Alle Zustandsmeldungen werden mit KI analysiert und tragen zur Verbesserung der Statistik bei.</FieldDescription>
           </Field>
 
           {message ? <FieldError>{message}</FieldError> : null}

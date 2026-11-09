@@ -34,6 +34,8 @@ services:
     environment:
       DATABASE_URL: "postgresql://gym_user:gym_password@postgres:5432/gym_capacity"
       FETCH_API_KEY: ${FETCH_API_KEY:-}
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "3000:3000"
     depends_on:

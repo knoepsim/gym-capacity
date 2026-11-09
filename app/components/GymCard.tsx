@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { DailyTrendChart, type DailyTrendPoint } from '@/app/components/DailyTrendChart'
-import { OCCUPANCY_LEVEL_BADGE, OCCUPANCY_LEVEL_LABEL, occupancyLevel } from '@/app/lib/occupancyLevel'
+import {
+  OCCUPANCY_LEVEL_BADGE,
+  OCCUPANCY_LEVEL_LABEL,
+  occupancyLevel,
+} from '@/app/lib/occupancyLevel'
 import {
   MIN_HISTORY_DAYS_FOR_RECOMMENDATION,
   berlinHour,

@@ -21,7 +21,8 @@ import {
   findBestTime,
   formatHourWindow,
 } from '@/app/lib/insights'
-import { OCCUPANCY_LEVEL_BADGE, OCCUPANCY_LEVEL_LABEL, occupancyLevel } from '@/app/lib/occupancyLevel'
+import { LevelBadge } from '@/app/components/LevelBadge'
+import { occupancyLevel } from '@/app/lib/occupancyLevel'
 import { isStale } from '@/app/lib/staleness'
 import { prisma } from '@/lib/prisma'
 
@@ -95,8 +96,6 @@ export default async function GymDetailPage({ params }: PageProps) {
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 pt-6 pb-24 sm:px-6 lg:px-8">
       <RecentGymTracker gymId={gymId} />
-      <FeedbackWidget gymId={gymId} gymName={gymInfo.name} />
-
       <div className="flex flex-col gap-2">
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link href="/">
@@ -130,7 +129,7 @@ export default async function GymDetailPage({ params }: PageProps) {
               {isLikelyClosed ? (
                 <Badge variant="secondary">Geschlossen</Badge>
               ) : (
-                <Badge variant={OCCUPANCY_LEVEL_BADGE[level]}>{OCCUPANCY_LEVEL_LABEL[level]}</Badge>
+                <LevelBadge level={level} />
               )}
             </CardAction>
           </CardHeader>
@@ -179,6 +178,8 @@ export default async function GymDetailPage({ params }: PageProps) {
           </CardContent>
         </Card>
       )}
+
+      <FeedbackWidget gymId={gymId} gymName={gymInfo.name} />
 
       <Card>
         <CardHeader>

@@ -16,12 +16,7 @@ function csvEscape(value: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get('x-api-key')
-    const expectedApiKey = process.env.EXPORT_API_KEY || process.env.FETCH_API_KEY
-
-    if (expectedApiKey && apiKey !== expectedApiKey) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Access is restricted to the admin login by middleware.ts
 
     const params = request.nextUrl?.searchParams
     const sinceParam = params?.get('since')
@@ -47,6 +42,8 @@ export async function GET(request: NextRequest) {
             name: true,
           },
         },
+        ref: { select: { name: true } },
+        activation: { select: { index: true } },
       },
       orderBy: { id: 'asc' },
       ...(limit ? { take: limit } : {}),
@@ -63,6 +60,9 @@ export async function GET(request: NextRequest) {
       'wouldGoRating',
       'comment',
       'sourcePath',
+      'refId',
+      'refName',
+      'refDevice',
       'createdAt',
     ]
 
@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
           csvEscape(entry.wouldGoRating),
           csvEscape(entry.comment),
           csvEscape(entry.sourcePath),
+          csvEscape(entry.refId),
+          csvEscape(entry.ref?.name),
+          csvEscape(entry.activation?.index),
           csvEscape(entry.createdAt),
         ].join(',')
       )

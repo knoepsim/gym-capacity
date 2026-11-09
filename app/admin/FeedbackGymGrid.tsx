@@ -8,6 +8,7 @@ import { useDataGrid } from '@/hooks/use-data-grid'
 type FeedbackGridRow = {
   id: number
   createdAtLabel: string
+  refName: string | null
   impression: string | null
   estimatedCount: number | null
   occupancyCount: number | null
@@ -26,6 +27,12 @@ export function FeedbackGymGrid({ entries }: FeedbackGymGridProps) {
         accessorKey: 'createdAtLabel',
         header: 'Zeitpunkt',
         meta: { label: 'Zeitpunkt', cell: { variant: 'short-text' } },
+      },
+      {
+        id: 'refName',
+        accessorKey: 'refName',
+        header: 'Von',
+        meta: { label: 'Von', cell: { variant: 'short-text' } },
       },
       {
         id: 'impression',

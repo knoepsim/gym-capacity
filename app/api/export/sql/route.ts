@@ -77,12 +77,7 @@ function buildSqlDump(
 
 export async function GET(request: NextRequest) {
   try {
-    const apiKey = request.headers.get('x-api-key')
-    const expectedApiKey = process.env.EXPORT_API_KEY || process.env.FETCH_API_KEY
-
-    if (expectedApiKey && apiKey !== expectedApiKey) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Access is restricted to the admin login by middleware.ts
 
     // Support query params: ?since=2026-04-01T00:00:00Z&limit=10000
     const params = request.nextUrl?.searchParams

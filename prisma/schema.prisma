@@ -68,10 +68,47 @@ model GymFeedback {
   wouldGoRating  Int?
   comment        String?
   sourcePath     String?
+  refId          String? // ref link the member opened last; marks reports from trusted people
+  ref            RefLink? @relation(fields: [refId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  activationId   Int? // device of that ref link the report came from
+  activation     RefActivation? @relation(fields: [activationId], references: [id], onDelete: SetNull)
   createdAt      DateTime @default(now())
 
   @@index([gymId, createdAt])
   @@index([createdAt])
+  @@index([refId])
+  @@index([activationId])
+}
+
+// Named invite link (?ref=<id>) handed to trusted people so their reports can be told apart.
+model RefLink {
+  id        String        @id // 6 characters from A-Z, a-z, 1-9
+  name      String // shown publicly next to the code (e.g. first name)
+  note        String? // internal admin note, never sent to the public API
+  deviceLimit Int             @default(2) // browsers that may activate this link
+  createdAt   DateTime        @default(now())
+  feedbacks   GymFeedback[]
+  activations RefActivation[]
+}
+
+// One browser that opened a ref link. The random suffix is what the browser stores and sends (<refId>_<suffix>),
+// so knowing the public code alone does not make a report trusted.
+model RefActivation {
+  id        Int           @id @default(autoincrement())
+  refId     String
+  ref       RefLink       @relation(fields: [refId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  index     Int // 1-based order of activation, shown as "Gerät n"
+  suffix    String
+  ip          String? // address the browser activated from (first X-Forwarded-For entry)
+  userAgent   String?
+  deviceModel String? // from client hints; only Chromium on Android reports it
+  revokedAt   DateTime? // soft delete: the token stops counting, reports from it arrive without a ref
+  createdAt DateTime      @default(now())
+  feedbacks GymFeedback[]
+  events    RefEvent[]
+
+  @@unique([refId, index])
+  @@unique([refId, suffix])
 }
 
 model GymAnalyticsCache {
@@ -82,4 +119,16 @@ model GymAnalyticsCache {
   computedAt            DateTime  @updatedAt
 
   @@index([computedAt])
+}
+
+// Access log per device: 'activate' (link opened), 'visit' (site opened, at most every few minutes) and
+// 'report' (feedback sent). The newest row is the device's last access.
+model RefEvent {
+  id           Int           @id @default(autoincrement())
+  activationId Int
+  activation   RefActivation @relation(fields: [activationId], references: [id], onDelete: Cascade)
+  type         String
+  createdAt    DateTime      @default(now())
+
+  @@index([activationId, createdAt])
 }

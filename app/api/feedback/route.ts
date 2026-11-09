@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { findRefActivation, logRefEvent } from '@/app/lib/refActivation'
 
 function normalizeRating(value: unknown): number | null {
   if (value === null || value === undefined || value === '') {
@@ -36,9 +37,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'gymId required' }, { status: 400 })
     }
 
+    // Only device tokens the server handed out count; anything else is dropped instead of failing the report
+    const activation = await findRefActivation(prisma, body.ref)
+
     const created = await prisma.gymFeedback.create({
       data: {
         gymId,
+        refId: activation?.refId ?? null,
+        activationId: activation?.id ?? null,
         occupancyCount: normalizeOptionalInteger(body.occupancyCount),
         estimatedCount: normalizeOptionalInteger(body.estimatedCount),
         waitTimeRating: normalizeRating(body.waitTimeRating),
@@ -48,6 +54,8 @@ export async function POST(request: NextRequest) {
         sourcePath: typeof body.sourcePath === 'string' && body.sourcePath.trim() ? body.sourcePath.trim() : null,
       },
     })
+
+    if (activation) await logRefEvent(prisma, activation.id, 'report')
 
     return NextResponse.json({ success: true, feedbackId: created.id }, { status: 201 })
   } catch (error) {

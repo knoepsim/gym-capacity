@@ -3,8 +3,10 @@ import { Inter, Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import AutoRefresh from './components/AutoRefresh'
 import { OfflineBlocker } from './components/OfflineBlocker'
+import { RefTracker } from './components/RefTracker'
 import { ThemeProvider } from './components/ThemeProvider'
 import ServiceWorkerRegister from './components/ServiceWorkerRegister'
+import { SiteFooter } from './components/SiteFooter'
 import { SiteHeader } from './components/SiteHeader'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -36,8 +38,10 @@ export default function RootLayout({
             <SiteHeader />
             <OfflineBlocker>
               <ServiceWorkerRegister />
+              <RefTracker />
               <AutoRefresh />
               {children}
+              <SiteFooter />
               <Toaster position="bottom-center" />
             </OfflineBlocker>
           </TooltipProvider>

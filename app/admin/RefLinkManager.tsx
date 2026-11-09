@@ -17,6 +17,7 @@ export type RefDeviceRow = {
   index: number
   revoked: boolean
   lastSeenLabel: string | null
+  lastIp: string | null
   suffix: string
   kind: 'mobile' | 'desktop'
   label: string
@@ -327,9 +328,14 @@ export function RefLinkManager({ refLinks }: { refLinks: RefLinkRow[] }) {
                                   {refLink.id}_{device.suffix}
                                 </code>
                                 <span className={cn(device.revoked && 'text-muted-foreground line-through')}>{device.label}</span>
-                                <span className="text-muted-foreground">IP {device.ip ?? 'unbekannt'}</span>
+                                <span className="text-muted-foreground">IP bei Aktivierung {device.ip ?? 'unbekannt'}</span>
                                 <span className="text-muted-foreground">aktiviert {device.createdAtLabel}</span>
                                 <span className="text-muted-foreground">zuletzt aktiv {device.lastSeenLabel ?? 'nie'}</span>
+                                {device.lastIp ? (
+                                  <span className={cn('text-muted-foreground', device.ip && device.lastIp !== device.ip && 'font-medium text-foreground')}>
+                                    letzte IP {device.lastIp}
+                                  </span>
+                                ) : null}
                                 {device.revoked ? <Badge variant="destructive">Gelöscht</Badge> : null}
                                 <Button
                                   type="button"

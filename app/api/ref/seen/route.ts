@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { clientIp } from '@/app/lib/clientIp'
 import { findRefActivation, logRefEvent } from '@/app/lib/refActivation'
 
 // Called once per browser session by RefTracker: marks the device as seen. Always 204, so a revoked or unknown
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { token?: unknown }
     const activation = await findRefActivation(prisma, body.token)
-    if (activation) await logRefEvent(prisma, activation.id, 'visit')
+    if (activation) await logRefEvent(prisma, activation.id, 'visit', clientIp(request))
   } catch {
     // Malformed body: nothing to record
   }

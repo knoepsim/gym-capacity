@@ -128,6 +128,7 @@ model RefEvent {
   activationId Int
   activation   RefActivation @relation(fields: [activationId], references: [id], onDelete: Cascade)
   type         String
+  ip           String? // address of this access, so a device used from elsewhere stands out
   createdAt    DateTime      @default(now())
 
   @@index([activationId, createdAt])

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { clientIp } from '@/app/lib/clientIp'
 import { findRefActivation, logRefEvent } from '@/app/lib/refActivation'
 
 function normalizeRating(value: unknown): number | null {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (activation) await logRefEvent(prisma, activation.id, 'report')
+    if (activation) await logRefEvent(prisma, activation.id, 'report', clientIp(request))
 
     return NextResponse.json({ success: true, feedbackId: created.id }, { status: 201 })
   } catch (error) {

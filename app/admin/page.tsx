@@ -40,7 +40,7 @@ async function getAdminData() {
           _count: { select: { feedbacks: true, activations: true } },
           activations: {
             orderBy: { index: 'asc' },
-            include: { events: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } } },
+            include: { events: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, ip: true } } },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -169,6 +169,7 @@ export default async function AdminPage() {
                     id: activation.id,
                     index: activation.index,
                     revoked: activation.revokedAt !== null,
+                    lastIp: activation.events[0]?.ip ?? null,
                     lastSeenLabel: activation.events[0] ? timestampFormat.format(activation.events[0].createdAt) : null,
                     suffix: activation.suffix,
                     kind: deviceKind(activation.userAgent),

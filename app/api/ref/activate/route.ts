@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { clientIp } from '@/app/lib/clientIp'
 import { logRefEvent } from '@/app/lib/refActivation'
 import { REF_ALPHABET, REF_SUFFIX_LENGTH, isRefId } from '@/app/lib/refLink'
 
@@ -25,16 +26,7 @@ export async function POST(request: NextRequest) {
   if (!isRefId(body.ref)) return new NextResponse(null, { status: 204 })
   const refId = body.ref
 
-  // Cloudflare overwrites CF-Connecting-IP with the real client address. X-Forwarded-For is only appended to, so its
-  // first entry can be faked by the client; it stays as the fallback for setups without Cloudflare
-  const ip =
-    (
-      request.headers.get('cf-connecting-ip') ??
-      request.headers.get('x-forwarded-for')?.split(',')[0] ??
-      request.headers.get('x-real-ip')
-    )
-      ?.trim()
-      .slice(0, 64) || null
+  const ip = clientIp(request)
   const userAgent = request.headers.get('user-agent')?.slice(0, 400) || null
   // Client hints from JavaScript first, then the request header (quoted, set after Accept-CH); both need HTTPS
   const bodyModel = typeof body.model === 'string' ? body.model : ''
@@ -56,7 +48,7 @@ export async function POST(request: NextRequest) {
         data: { refId, index: refLink._count.activations + 1, suffix: randomSuffix(), ip, userAgent, deviceModel },
         select: { id: true, suffix: true },
       })
-      await logRefEvent(prisma, activation.id, 'activate')
+      await logRefEvent(prisma, activation.id, 'activate', ip)
       return NextResponse.json({ token: `${refId}_${activation.suffix}` }, { headers: { 'Cache-Control': 'no-store' } })
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') continue

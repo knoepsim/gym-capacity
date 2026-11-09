@@ -15,19 +15,19 @@ export async function findRefActivation(prisma: PrismaClient, token: unknown) {
 }
 
 /**
- * Records an access of a device. Failures never break the request; 'visit' is skipped when the device
- * was seen in the last few minutes so page loads do not flood the table.
+ * Records an access of a device with its IP. Failures never break the request. A 'visit' is skipped when the
+ * device was seen in the last few minutes from the same IP, so page loads do not flood the table.
  */
-export async function logRefEvent(prisma: PrismaClient, activationId: number, type: RefEventType) {
+export async function logRefEvent(prisma: PrismaClient, activationId: number, type: RefEventType, ip: string | null) {
   try {
     if (type === 'visit') {
       const recent = await prisma.refEvent.findFirst({
-        where: { activationId, createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) } },
+        where: { activationId, ip, createdAt: { gt: new Date(Date.now() - 5 * 60 * 1000) } },
         select: { id: true },
       })
       if (recent) return
     }
-    await prisma.refEvent.create({ data: { activationId, type } })
+    await prisma.refEvent.create({ data: { activationId, type, ip } })
   } catch (error) {
     console.error('ref event error', error)
   }

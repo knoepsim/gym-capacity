@@ -25,8 +25,16 @@ export async function POST(request: NextRequest) {
   if (!isRefId(body.ref)) return new NextResponse(null, { status: 204 })
   const refId = body.ref
 
-  // Behind a proxy the client address is the first X-Forwarded-For entry
-  const ip = (request.headers.get('x-forwarded-for')?.split(',')[0] ?? request.headers.get('x-real-ip'))?.trim().slice(0, 64) || null
+  // Cloudflare overwrites CF-Connecting-IP with the real client address. X-Forwarded-For is only appended to, so its
+  // first entry can be faked by the client; it stays as the fallback for setups without Cloudflare
+  const ip =
+    (
+      request.headers.get('cf-connecting-ip') ??
+      request.headers.get('x-forwarded-for')?.split(',')[0] ??
+      request.headers.get('x-real-ip')
+    )
+      ?.trim()
+      .slice(0, 64) || null
   const userAgent = request.headers.get('user-agent')?.slice(0, 400) || null
   // Client hints from JavaScript first, then the request header (quoted, set after Accept-CH); both need HTTPS
   const bodyModel = typeof body.model === 'string' ? body.model : ''
